@@ -101,12 +101,9 @@ boot(void)
 	kprintf("%s", harvard_copyright);
 	kprintf("\n");
 
-<<<<<<< HEAD
+
 	kprintf("Weihaoqu's system version %s (%s #%d)\n", 
-=======
-	kprintf("Weihao's system version %s (%s #%d)\n", 
->>>>>>> 5e48a1cead28c9d12fb4154f3c07f96b323c5cc3
-		GROUP_VERSION, buildconfig, buildversion);
+        GROUP_VERSION, buildconfig, buildversion);
 	kprintf("\n");
 
 	/* Early initialization. */
