@@ -101,7 +101,7 @@ boot(void)
 	kprintf("%s", harvard_copyright);
 	kprintf("\n");
 
-	kprintf("Put-your-group-name-here's system version %s (%s #%d)\n", 
+	kprintf("Weihaoqu's system version %s (%s #%d)\n", 
 		GROUP_VERSION, buildconfig, buildversion);
 	kprintf("\n");
 
@@ -203,7 +203,7 @@ sys_reboot(int code)
  */
 void
 kmain(char *arguments)
-{
+{      
 	boot();
 
 	menu(arguments);
