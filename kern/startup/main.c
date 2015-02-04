@@ -1,4 +1,5 @@
-/*username is weihaoqu@buffalo.edu
+//weihaoqu@buffalo.edu
+/*
  * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
  *	The President and Fellows of Harvard College.
  *
