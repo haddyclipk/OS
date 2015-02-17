@@ -74,7 +74,12 @@ void V(struct semaphore *);
  */
 struct lock {
         char *lk_name;
-        // add what you need here
+        struct wchan *lk_wchan;
+	struct thread *lk_cur;
+	struct spinlock lk_lock;
+        volatile bool locked;
+        
+	// add what you need here
         // (don't forget to mark things volatile as needed)
 };
 
@@ -113,7 +118,9 @@ void lock_destroy(struct lock *);
 
 struct cv {
         char *cv_name;
-        // add what you need here
+        struct wchan *cv_wchan;
+	struct lock *cv_lock;
+	// add what you need here
         // (don't forget to mark things volatile as needed)
 };
 
@@ -143,14 +150,20 @@ void cv_broadcast(struct cv *cv, struct lock *lock);
 
 struct rwlock {
         char *rwlock_name;
+	struct lock *r_lock;
+	struct lock *w_lock;
+	//struct lock *Q_lock;               //limit reader if writer waits
+	struct lock *rw_lock;
+	volatile int readcount;
+	volatile int writecount;
 };
 
-struct rwlock * rwlock_create(const char *);
-void rwlock_destroy(struct rwlock *);
+struct rwlock *rwlock_create(const char *name);
+void rwlock_destroy(struct rwlock *rwlock);
 
-void rwlock_acquire_read(struct rwlock *);
-void rwlock_release_read(struct rwlock *);
-void rwlock_acquire_write(struct rwlock *);
-void rwlock_release_write(struct rwlock *);
+void rwlock_acquire_read(struct rwlock *rwlock);
+void rwlock_release_read(struct rwlock *rwlock);
+void rwlock_acquire_write(struct rwlock *rwlock);
+void rwlock_release_write(struct rwlock *rwlock);
 
 #endif /* _SYNCH_H_ */

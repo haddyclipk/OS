@@ -102,8 +102,7 @@ boot(void)
 	kprintf("\n");
 
 
-	kprintf("Weihaoqu's system version %s (%s #%d)\n", 
-        GROUP_VERSION, buildconfig, buildversion);
+	kprintf("weihaoqu@buffalo.edu's system version %s (%s #%d)\n", GROUP_VERSION, buildconfig, buildversion);
 	kprintf("\n");
 
 	/* Early initialization. */
@@ -204,9 +203,7 @@ sys_reboot(int code)
  */
 void
 kmain(char *arguments)
-{      
-	boot();
-
+{       boot();
 	menu(arguments);
 
 	/* Should not get here */
