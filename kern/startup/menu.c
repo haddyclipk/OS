@@ -43,7 +43,8 @@
 #include "opt-synchprobs.h"
 #include "opt-sfs.h"
 #include "opt-net.h"
-
+#include <kern/process.h>
+#include <kern/filesys.h>
 /*
  * In-kernel menu and command dispatcher.
  */
@@ -100,7 +101,7 @@ cmd_progthread(void *ptr, unsigned long nargs)
 
 	strcpy(progname, args[0]);
 
-	result = runprogram(progname);
+	result = runprogram(progname, nargs, args);
 	if (result) {
 		kprintf("Running program %s failed: %s\n", args[0],
 			strerror(result));
@@ -132,16 +133,18 @@ common_prog(int nargs, char **args)
 	kprintf("Warning: this probably won't work with a "
 		"synchronization-problems kernel.\n");
 #endif
-
+	struct thread *cthread;
+	
 	result = thread_fork(args[0] /* thread name */,
 			cmd_progthread /* thread function */,
 			args /* thread arg */, nargs /* thread arg */,
-			NULL);
+			&cthread);
 	if (result) {
 		kprintf("thread_fork failed: %s\n", strerror(result));
 		return result;
 	}
-
+	P(ptable[cthread->t_pid]->sem_proc);
+	
 	return 0;
 }
 
@@ -491,7 +494,7 @@ cmd_mainmenu(int n, char **a)
 {
 	(void)n;
 	(void)a;
-
+	
 	showmenu("OS/161 kernel menu", mainmenu);
 	return 0;
 }

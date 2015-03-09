@@ -38,6 +38,8 @@
 
 #include <spinlock.h>
 #include <threadlist.h>
+#include <kern/filesys.h>
+
 
 struct addrspace;
 struct cpu;
@@ -104,7 +106,8 @@ struct thread {
 	/*
 	 * Public fields
 	 */
-
+	pid_t t_pid;
+	struct fd *fdtable[OPEN_MAX];
 	/* VM */
 	struct addrspace *t_addrspace;	/* virtual address space */
 

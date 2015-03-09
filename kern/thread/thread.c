@@ -47,6 +47,7 @@
 #include <addrspace.h>
 #include <mainbus.h>
 #include <vnode.h>
+#include <kern/process.h>
 
 #include "opt-synchprobs.h"
 #include "opt-defaultscheduler.h"
@@ -153,7 +154,21 @@ thread_create(const char *name)
 	thread->t_cwd = NULL;
 
 	/* If you add to struct thread, be sure to initialize here */
-
+	for(int i=0; i<OPEN_MAX;i++){
+	thread->fdtable[i]=NULL;
+	}
+	pid_t k=pid_alloc();
+	thread->t_pid=k;
+	
+	int err=process_create(k,thread);
+	if (err) {
+		kfree(thread->t_name);
+		kfree(thread);
+		return NULL;
+		}	
+//if(k=0){
+	//	kfree(thread);
+	
 	return thread;
 }
 
@@ -245,6 +260,7 @@ thread_destroy(struct thread *thread)
 	 * If you add things to struct thread, be sure to clean them up
 	 * either here or in thread_exit(). (And not both...)
 	 */
+	//kfree(&thread->t_pid);
 
 	/* VFS fields, cleaned up in thread_exit */
 	KASSERT(thread->t_cwd == NULL);
@@ -261,7 +277,7 @@ thread_destroy(struct thread *thread)
 
 	/* sheer paranoia */
 	thread->t_wchan_name = "DESTROYED";
-
+	
 	kfree(thread->t_name);
 	kfree(thread);
 }
@@ -488,7 +504,10 @@ thread_fork(const char *name,
 	if (newthread == NULL) {
 		return ENOMEM;
 	}
-
+	if(newthread->t_pid==-2){
+	thread_destroy(newthread);
+	return ENPROC;
+	}
 	/* Allocate a stack */
 	newthread->t_stack = kmalloc(STACK_SIZE);
 	if (newthread->t_stack == NULL) {
@@ -520,9 +539,29 @@ thread_fork(const char *name,
 	 */
 	newthread->t_iplhigh_count++;
 
+	/*check if pid is available, give thread pid*/
+	
+	//data1->tf_a0=k;
+	
 	/* Set up the switchframe so entrypoint() gets called */
 	switchframe_init(newthread, entrypoint, data1, data2);
-
+	
+	/*copy ftable from parent to child*/
+	struct fd *f=NULL;
+	for(int i=0;i<OPEN_MAX;i++){
+		if(curthread->fdtable[i]!=NULL){
+	f=curthread->fdtable[i];
+	newthread->fdtable[i]=f;
+	newthread->fdtable[i]->ref_count++; }
+}
+	//pid_t k =pid_alloc();
+	
+	//newthread->t_pid=k;
+	//int err=process_create(k,newthread);
+	//if (err) {
+	//	thread_destroy(newthread);
+	//	return err;
+	//	}
 	/* Lock the current cpu's run queue and make the new thread runnable */
 	thread_make_runnable(newthread, false);
 
@@ -816,7 +855,13 @@ thread_exit(void)
 
 	/* Check the stack guard band. */
 	thread_checkstack(cur);
-
+	int ret=0;
+	int k=0;	
+	for(int i=0;i<OPEN_MAX;i++){
+	if (cur->fdtable[i]!=NULL){
+	k=sys_close(i,&ret);
+		}
+	}
 	/* Interrupts off on this processor */
         splhigh();
 	thread_switch(S_ZOMBIE, NULL);
