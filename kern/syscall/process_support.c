@@ -31,12 +31,9 @@ int sys_fork(struct trapframe *tf,int *retval ){
 	}
 	struct addrspace *cspace=NULL;
 	
-	
-	//*ktf=*tf;
 	memcpy(ktf,tf,sizeof(struct trapframe));
 	 int err=as_copy(curthread->t_addrspace,&cspace);
 	if (err){ 	
-	
 	kfree(ktf);
 	return err;
 	}
@@ -65,17 +62,14 @@ int sys_fork(struct trapframe *tf,int *retval ){
 void
 child_fork_entry(void *data1, unsigned long data2 ){
 	
-	struct trapframe *tf=(struct trapframe*)data1;
-	struct addrspace *sp=(struct addrspace*)data2;
-	
-	
-	
-	tf->tf_a3=0;
-	tf->tf_v0=0;
-	tf->tf_epc += 4;
+	struct trapframe *ktf=data1;
+	struct addrspace *space=(struct addrspace*)data2;
+	ktf->tf_a3=0;
+	ktf->tf_v0=0;
+	ktf->tf_epc += 4;
 	
 	KASSERT( curthread->t_addrspace == NULL );
-	curthread->t_addrspace =sp;
+	curthread->t_addrspace =space;
 	//curthread->t_addrspace = as_create();
 	
 	//memcpy(curthread->t_addrspace, sp, sizeof(struct addrspace));
@@ -83,12 +77,12 @@ child_fork_entry(void *data1, unsigned long data2 ){
 	//tf->tf_a1=1;
 	//tf->tf_a0=0;
 	struct trapframe tfm;
-	memcpy(&tfm, tf, sizeof(struct trapframe));
-	kfree(tf);
+	memcpy(&tfm, ktf, sizeof(struct trapframe));
+	kfree(ktf);
 	mips_usermode(&tfm);
 	}
  
-int sys__exit(int*retval,int exitcode){
+int sys__exit(int exitcode){
 		KASSERT(ptable[curthread->t_pid]!=NULL);
 		//lock_acquire(ptable[curthread->t_pid]->lock_proc);
 		
@@ -108,13 +102,13 @@ int sys__exit(int*retval,int exitcode){
 		
 		//}
 		
-		for(int i=2;i<256;i++){
-		if(ptable[i]!=NULL){
-		if((ptable[i]->ppid)==curthread->t_pid) ptable[i]->ppid=-1;
-		}	
-	}
+	//for(int i=2;i<256;i++){
+	//	if(ptable[i]!=NULL){
+	//	if((ptable[i]->ppid)==curthread->t_pid) ptable[i]->ppid=-1;
+	//	}	
+//	}
 		thread_exit();
-		*retval=0;
+		//*retval=0;
 		return 0;
 }
  int sys_waitpid(int *retval,pid_t pid, int *status, int options){
@@ -126,7 +120,6 @@ int sys__exit(int*retval,int exitcode){
 	if(curthread->t_pid!=ptable[pid]->ppid){ return ECHILD;}
 	if((vaddr_t)status%4 !=0){return EFAULT;}
 	if ((vaddr_t)status>=(vaddr_t)USERSPACETOP){return EFAULT;}
-	//lock_acquire(ptable[pid]->lock_proc);
 	if(ptable[pid]->exited==false){
 	P(ptable[pid]->sem_proc);
 	}
@@ -140,14 +133,14 @@ int sys__exit(int*retval,int exitcode){
 	if(err) {kfree(childcode);
 		return err;
 		}
-	
+	kfree(childcode);
 	return 0;
 }
 
 int sys_execv(int *retval,const char *program, char **args){
 	/*copy args into kspace*/
 	size_t len;
-	
+	if (args==NULL) return EFAULT;
 	char *kprogram=kmalloc(PATH_MAX*sizeof(char));
 	if(kprogram==NULL){*retval=-1;return ENOMEM; }
 	

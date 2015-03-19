@@ -90,10 +90,9 @@ int sys_open(const char *fdesc_name, int flags, mode_t mode , int *retval) {
  	char *fname; 
 	size_t len;
         fname = (char *)kmalloc(sizeof(char)*PATH_MAX);
-        result = copyinstr((const_userptr_t)fdesc_name, fname, PATH_MAX, &len);
-        if(result){
+         if(copyinstr((const_userptr_t)fdesc_name, fname, PATH_MAX, &len)){
                 kfree(fname);
-		
+		*retval = -1;
                 return EFAULT;
         }
 
@@ -117,14 +116,16 @@ int sys_open(const char *fdesc_name, int flags, mode_t mode , int *retval) {
  		return result; 
  	} 
   	strcpy(curthread->fdtable[index]->filename,fname);
+	curthread->fdtable[index]->lock= lock_create(fname); 
+	kfree(fname);
  	curthread->fdtable[index]->vn = vn; 
  	curthread->fdtable[index]->flags = flags; 
  	curthread->fdtable[index]->ref_count = 1; 
  	curthread->fdtable[index]->offset = 0; 
- 	curthread->fdtable[index]->lock= lock_create(fname); 
+ 	
 	if(curthread->fdtable[index]->lock == NULL) return ENOMEM;
   	
-	kfree(fname);
+	
 	*retval = index;
  	return 0; 
  } 
@@ -132,27 +133,32 @@ int sys_open(const char *fdesc_name, int flags, mode_t mode , int *retval) {
  
 int sys_close(int fh, int *retval) { 
 
- 	if(fh >= OPEN_MAX || fh < 0) { 
-		
+ 	if(fh >= OPEN_MAX ){
+		*retval = -1;
+		return EBADF;
+	}
+
+	if(fh < 0) { 
+		*retval = -1;
  		return EBADF;  //not valid location in fdtable[]
  	} 
-  
+
  	if(curthread->fdtable[fh] == NULL) { 
-		
+		*retval = -1;
  		return EBADF;  // already empty or closed so that fdtable[fh] is closed
  	}  
  
  	if(curthread->fdtable[fh]->vn == NULL) { 
-		
+		*retval = -1;
  		return EBADF;  // if there is no valid fdesc inside of fdtable
  	} 
   
- 	if(curthread->fdtable[fh]->ref_count == 1) { 
- 		VOP_CLOSE(curthread->fdtable[fh]->vn); 
- 		lock_destroy(curthread->fdtable[fh]->lock); 
- 		kfree(curthread->fdtable[fh]); 
- 		curthread->fdtable[fh] = NULL; 
- 	}else{ curthread->fdtable[fh]->ref_count--;}
+ 	if(curthread->fdtable[fh]->ref_count == 1) {  
+ 		VOP_CLOSE(curthread->fdtable[fh]->vn);
+                lock_destroy(curthread->fdtable[fh]->lock);
+		kfree(curthread->fdtable[fh]); 
+ 		curthread->fdtable[fh] = NULL;
+ 	}else curthread->fdtable[fh]->ref_count--;
    	
 	*retval = 0;
  	return 0;  
@@ -314,9 +320,7 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *retval){
 	
 	lock_acquire(curthread->fdtable[fd]->lock);	
 	
-	result = VOP_STAT(curthread->fdtable[fd]->vn, &s);
-	
-	if(result){
+	if(VOP_STAT(curthread->fdtable[fd]->vn, &s)){
 		lock_release(curthread->fdtable[fd]->lock);
 		*retval = (off_t)-1;
 		return EBADF;
@@ -390,13 +394,14 @@ int sys_chdir(const char *pathname, int *retval){
 int sys___getcwd(char *buf, size_t buflen, int *retval){
 	struct uio u;
 	struct iovec i;
-	char *nbuf;
-	nbuf = (char *)kmalloc(sizeof(char)*buflen);	
-	int result = copyinstr((const_userptr_t)buf, buf, PATH_MAX, &buflen);
-	if(result){
-		 *retval = -1;
-		 return EFAULT;
-	}
+	if(buf==NULL) return EFAULT;
+	
+	//char *nbuf=(char *)kmalloc(sizeof(char)*buflen);	
+	int result = 0;
+	//if(copyinstr((const_userptr_t)buf, nbuf, PATH_MAX, &buflen)){
+	//	 *retval = -1;
+	//	 return EFAULT;
+	//}
 
 	i.iov_ubase = (userptr_t)buf;
 	i.iov_len = (buflen -1);

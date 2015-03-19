@@ -855,6 +855,8 @@ thread_exit(void)
 
 	/* Check the stack guard band. */
 	thread_checkstack(cur);
+	
+	/*close fdtable if needed*/
 	int ret=0;
 	int k=0;	
 	for(int i=0;i<OPEN_MAX;i++){
