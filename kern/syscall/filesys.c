@@ -117,13 +117,15 @@ int sys_open(const char *fdesc_name, int flags, mode_t mode , int *retval) {
  	} 
   	strcpy(curthread->fdtable[index]->filename,fname);
 	curthread->fdtable[index]->lock= lock_create(fname); 
+	
 	kfree(fname);
+	if(curthread->fdtable[index]->lock == NULL) return ENOMEM;
  	curthread->fdtable[index]->vn = vn; 
  	curthread->fdtable[index]->flags = flags; 
  	curthread->fdtable[index]->ref_count = 1; 
  	curthread->fdtable[index]->offset = 0; 
  	
-	if(curthread->fdtable[index]->lock == NULL) return ENOMEM;
+	
   	
 	
 	*retval = index;
@@ -152,14 +154,16 @@ int sys_close(int fh, int *retval) {
 		*retval = -1;
  		return EBADF;  // if there is no valid fdesc inside of fdtable
  	} 
-  
+  	
  	if(curthread->fdtable[fh]->ref_count == 1) {  
  		VOP_CLOSE(curthread->fdtable[fh]->vn);
+		curthread->fdtable[fh]->ref_count =0;
                 lock_destroy(curthread->fdtable[fh]->lock);
 		kfree(curthread->fdtable[fh]); 
  		curthread->fdtable[fh] = NULL;
  	}else curthread->fdtable[fh]->ref_count--;
-   	
+   	int *k=kmalloc(sizeof(int));
+	kfree(k);
 	*retval = 0;
  	return 0;  
 } 
@@ -329,6 +333,7 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *retval){
 	pos1 = pos;
 	result = strcmp(curthread->fdtable[fd]->filename, "null");
 	if(result == 0){
+		lock_release(curthread->fdtable[fd]->lock);
 		*retval = (off_t)-1;
 		return ESPIPE;
 	}
@@ -345,7 +350,7 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *retval){
 		if(result){
 			lock_release(curthread->fdtable[fd]->lock);	
 			*retval =(off_t) -1;
-			return EINVAL;
+			return ESPIPE;
 		}
 		curr = curthread->fdtable[fd]->offset;
 		noffset = pos1+curr;
