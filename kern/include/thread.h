@@ -39,7 +39,7 @@
 #include <spinlock.h>
 #include <threadlist.h>
 #include <kern/filesys.h>
-
+#include<limits.h>
 
 struct addrspace;
 struct cpu;

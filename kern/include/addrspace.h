@@ -40,6 +40,17 @@
 
 struct vnode;
 
+struct PTE{
+	vaddr_t va;
+	paddr_t pa;
+	struct PTE *next;
+};
+
+struct region{
+	vaddr_t vbase;
+	size_t psize;
+	struct region *next;
+};
 
 /* 
  * Address space - data structure associated with the virtual memory
@@ -58,6 +69,12 @@ struct addrspace {
         size_t as_npages2;
         paddr_t as_stackpbase;
 #else
+        struct PTE *ptable;
+        struct region *region;
+        vaddr_t heap_base;
+        vaddr_t heap_top;
+        vaddr_t stack_top;
+        vaddr_t stack_base;
         /* Put stuff here for your VM system */
 #endif
 };

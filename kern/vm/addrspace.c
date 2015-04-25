@@ -52,6 +52,12 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
+	as->ptable=kmalloc(sizeof(struct PTE));
+	as->region=kmalloc(sizeof(struct region));
+	as->heap_base=0;
+	as->heap_top=0;
+	as->stack_base=0;
+	as->stack_top=0;
 
 	return as;
 }
@@ -62,16 +68,54 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	struct addrspace *newas;
 
 	newas = as_create();
-	if (newas==NULL) {
+	if (newas==NULL || old == NULL) {
 		return ENOMEM;
 	}
 
+	//             added by junmo
+	newas->heap_base = old->heap_base;
+	newas->heap_top = old->heap_top;
+	newas->stack_base = old->stack_base;
+	newas->stack_top = old->stack_top;
+	//
+//	if(old->ptable == NULL) return ENOMEM;
+//		newas->ptable->pa = old->ptable->pa;
+//		newas->ptable->va = old->ptable->va;
+//
+//	if(old->region == NULL) return ENOMEM;
+//		newas->region = old->region;
+	//
+	struct PTE * temp1=old->ptable;
+	struct PTE * temp2=newas->ptable;
+
+	struct region * temp3 = old->region;
+	struct region * temp4 = newas->region;
+
+	while(old->ptable->next != NULL){
+		newas->ptable->next = kmalloc(sizeof(struct PTE));
+
+		newas->ptable->pa = old->ptable->pa;
+		newas->ptable->va = old->ptable->va;
+		newas->ptable = newas->ptable->next;
+		old->ptable = old->ptable->next;
+	}
+	old->ptable = temp1;
+	newas->ptable = temp2;
+
+	while(old->region->next != NULL){
+		newas->region->next = kmalloc(sizeof(struct region));
+
+		newas->region->psize = old->region->psize;
+		newas->region->vbase = old->region->vbase;
+		newas->region = newas->region->next;
+		old->region = old->region->next;
+	}
+	old->region = temp3;
+	newas->region = temp4;
 	/*
 	 * Write this.
 	 */
 
-	(void)old;
-	
 	*ret = newas;
 	return 0;
 }
@@ -82,6 +126,33 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
+	as->heap_base = 0;
+	as->heap_top = 0;
+	as->stack_base = 0;
+	as->stack_top = 0;
+
+	struct PTE * tmp1 = NULL;
+	struct PTE * temp1 = NULL;
+	struct region * tmp2 = NULL;
+	struct region * temp2 = NULL
+
+	while(as->ptable != NULL){
+		tmp1 = as->ptable;
+		as->ptable->pa = 0;
+		as->ptable->va = 0;
+		as->ptable = as->ptable->next;
+		temp1=tmp1;
+		kfree(temp1);
+	}
+
+	while(as->region!= NULL){
+		tmp2 = as->region;
+		as->region->psize = 0;
+		as->region->vbase = 0;
+		as->region = as->region->next;
+		temp2 = tmp2;
+		kfree(temp2);
+	}
 	
 	kfree(as);
 }
@@ -113,6 +184,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	/*
 	 * Write this.
 	 */
+	while(as->region->next != NULL)
 
 	(void)as;
 	(void)vaddr;

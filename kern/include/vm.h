@@ -29,14 +29,34 @@
 
 #ifndef _VM_H_
 #define _VM_H_
-
+#include <machine/vm.h>
 /*
  * VM system-related definitions.
  *
  * You'll probably want to add stuff here.
  */
+enum page_state{
+	FREE,
+	FIXED,
+	DIRTY,
+	CLEAN
+};
+
+struct coremap_entry{
+	vaddr_t va;
+	struct addrspace* as;
+	enum page_state pgstate;
+	int chunk;
+	int pid;
+};
+struct coremap_entry* coremap;
 
 
+
+vaddr_t page_alloc(void);
+vaddr_t page_nalloc(int npages);
+void page_free(void);
+void make_page_avail(struct coremap_entry* coremap);
 #include <machine/vm.h>
 
 /* Fault-type arguments to vm_fault() */

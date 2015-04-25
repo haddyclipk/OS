@@ -105,6 +105,7 @@ cmd_progthread(void *ptr, unsigned long nargs)
 	if (result) {
 		kprintf("Running program %s failed: %s\n", args[0],
 			strerror(result));
+			sys__exit(-1);
 		return;
 	}
 
@@ -116,7 +117,7 @@ cmd_progthread(void *ptr, unsigned long nargs)
  *
  * Note that this does not wait for the subprogram to finish, but
  * returns immediately to the menu. This is usually not what you want,
- * so you should have it call your system-calls-assignment waitpid
+ * so you should have it call your system-calls-assignment 
  * code after forking.
  *
  * Also note that because the subprogram's thread uses the "args"

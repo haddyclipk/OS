@@ -82,7 +82,7 @@ vaddr_t page_nalloc(int npages){
 		coremap[i+j].pgstate=DIRTY;}
 	}
 	lock_release(coremap_lk);
-	return coremap[i].va;
+	return PADDR_TO_KVADDR((i*PAGE_SIZE));
 
 
 }
@@ -97,7 +97,7 @@ vaddr_t page_alloc(void){
 		}
 	make_page_avail(&coremap[i]);
 	lock_release(coremap_lk);
-	return coremap[i].va;
+	return PADDR_TO_KVADDR((i*PAGE_SIZE));
 
 }
  void make_page_avail(struct coremap_entry* coremap){

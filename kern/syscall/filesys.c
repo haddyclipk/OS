@@ -156,7 +156,7 @@ int sys_close(int fh, int *retval) {
  	} 
   	
  	if(curthread->fdtable[fh]->ref_count == 1) {  
- 		VOP_CLOSE(curthread->fdtable[fh]->vn);
+ 		vfs_close(curthread->fdtable[fh]->vn);
 		curthread->fdtable[fh]->ref_count =0;
                 lock_destroy(curthread->fdtable[fh]->lock);
 		kfree(curthread->fdtable[fh]); 

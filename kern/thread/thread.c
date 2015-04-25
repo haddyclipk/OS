@@ -48,6 +48,7 @@
 #include <mainbus.h>
 #include <vnode.h>
 #include <kern/process.h>
+#include <limits.h>
 
 #include "opt-synchprobs.h"
 #include "opt-defaultscheduler.h"
