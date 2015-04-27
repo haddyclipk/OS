@@ -104,7 +104,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 
 	while(old->region->next != NULL){
 		newas->region->next = kmalloc(sizeof(struct region));
-
+		newas->region->reg_st=old->region->reg_st;
 		newas->region->psize = old->region->psize;
 		newas->region->vbase = old->region->vbase;
 		newas->region = newas->region->next;
@@ -134,10 +134,11 @@ as_destroy(struct addrspace *as)
 	struct PTE * tmp1 = NULL;
 	struct PTE * temp1 = NULL;
 	struct region * tmp2 = NULL;
-	struct region * temp2 = NULL
+	struct region * temp2 = NULL;
 
-	while(as->ptable != NULL){
+	while(as->ptable != NULL){  ////clean pagetable
 		tmp1 = as->ptable;
+		free_page(as->ptable->va);
 		as->ptable->pa = 0;
 		as->ptable->va = 0;
 		as->ptable = as->ptable->next;
@@ -145,8 +146,9 @@ as_destroy(struct addrspace *as)
 		kfree(temp1);
 	}
 
-	while(as->region!= NULL){
+	while(as->region!= NULL){  //clean region
 		tmp2 = as->region;
+		as->region->reg_st=0;///state
 		as->region->psize = 0;
 		as->region->vbase = 0;
 		as->region = as->region->next;
@@ -163,7 +165,7 @@ as_activate(struct addrspace *as)
 	/*
 	 * Write this.
 	 */
-
+	vm_tlbshootdown_all();
 	(void)as;  // suppress warning until code gets written
 }
 
@@ -184,15 +186,49 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	/*
 	 * Write this.
 	 */
-	while(as->region->next != NULL)
+	sz += vaddr & ~(vaddr_t)PAGE_FRAME; //Aligning Regions
+	vaddr &= PAGE_FRAME;
+	sz = (sz + PAGE_SIZE - 1) & PAGE_FRAME; //length
+	//region
+	struct region *tmp=as->region;
+	while(tmp->next != NULL){
+		tmp=tmp->next;
+	}
+	tmp->vbase=vaddr;
+	tmp->psize=sz/PAGE_SIZE;
+	if(readable)tmp->reg_st=READ;
+	if(writeable)tmp->reg_st=WRITE;
+	if(executable)tmp->reg_st=EXECUTE;
+	tmp->next=kmalloc(sizeof(struct region));
 
-	(void)as;
-	(void)vaddr;
-	(void)sz;
+	// update pagetable
+	struct PTE *tmp1=as->ptable;
+	while(tmp1->next!=NULL){
+		tmp1=tmp1->next;
+	}
+
+	for(int i=0;i<sz/PAGE_SIZE;i++){
+	tmp1->va=vaddr+i*PAGE_SIZE;
+
+	tmp1->pa=page_alloc();
+	//coremap update
+	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].va=tmp1->va;
+	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].as=as;
+	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].pgstate=DIRTY;
+	tmp1->next=kmalloc(sizeof(struct PTE));
+	}
+	//HEAP
+	as->heap_base=vaddr+sz;
+	as->heap_top=as->heap_base;
+
+
+//	(void)as;
+//	(void)vaddr;
+//	(void)sz;
 	(void)readable;
 	(void)writeable;
 	(void)executable;
-	return EUNIMP;
+	return 0;
 }
 
 int
@@ -201,8 +237,12 @@ as_prepare_load(struct addrspace *as)
 	/*
 	 * Write this.
 	 */
-
-	(void)as;
+	struct region *tmp=as->region;
+	while (tmp->next!=NULL){
+		if (tmp->reg_st==READ) {tmp->reg_st=EXECUTE;tmp->flag=1;}
+		tmp=tmp->next;
+	}
+	//(void)as;
 	return 0;
 }
 
@@ -212,6 +252,11 @@ as_complete_load(struct addrspace *as)
 	/*
 	 * Write this.
 	 */
+	struct region *tmp=as->region;
+		while (tmp->next!=NULL){
+			if (tmp->flag==1) {tmp->reg_st=READ;}
+			tmp=tmp->next;
+		}
 
 	(void)as;
 	return 0;

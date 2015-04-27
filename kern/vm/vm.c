@@ -96,6 +96,7 @@ vaddr_t page_alloc(void){
 		return EFAULT;
 		}
 	make_page_avail(&coremap[i]);
+	//coremap[i]->as=curthread->t_addrspace;//update addresspace
 	lock_release(coremap_lk);
 	return PADDR_TO_KVADDR((i*PAGE_SIZE));
 
@@ -111,12 +112,34 @@ void free_kpages(vaddr_t addr){
 	}
 	if(coremap[i].va!=addr) return;
 	if(coremap[i].pgstate==FIXED)return;
+
 	int chunk=coremap[i].chunk;
+	lock_acquire(coremap_lk);
+	for (int j=0;j<chunk;j++){
+		coremap[i+j].pgstate=FREE;
+		coremap[i+j].chunk=1;
+		as_destroy(coremap[i+j].as);
+		}
+	lock_release(coremap_lk);
+}
+
+void page_free(vaddr_t addr){
+	int i;
+	for (i=0;i<pnum;i++){
+		if(coremap[i].va==addr)break;
+	}
+	if(coremap[i].va!=addr) return;
+	if(coremap[i].pgstate==FIXED)return;
+
+	int chunk=coremap[i].chunk;
+	lock_acquire(coremap_lk);
 	for (int j=0;j<chunk;j++){
 		coremap[i+j].pgstate=FREE;
 		coremap[i+j].chunk=1;
 		}
+	lock_release(coremap_lk);
 }
+
 
 
 

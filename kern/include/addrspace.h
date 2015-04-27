@@ -39,6 +39,11 @@
 #include "opt-dumbvm.h"
 
 struct vnode;
+enum reg_state{
+	READ,
+	WRITE,
+	EXECUTE
+};
 
 struct PTE{
 	vaddr_t va;
@@ -49,6 +54,8 @@ struct PTE{
 struct region{
 	vaddr_t vbase;
 	size_t psize;
+	enum reg_state reg_st;
+	int flag=0;
 	struct region *next;
 };
 
