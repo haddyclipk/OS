@@ -93,7 +93,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 
 	while(old->ptable->next != NULL){
 		newas->ptable->next = kmalloc(sizeof(struct PTE));
-
+		newas->ptable->PTE_P=old->ptable->PTE_P;
 		newas->ptable->pa = old->ptable->pa;
 		newas->ptable->va = old->ptable->va;
 		newas->ptable = newas->ptable->next;
@@ -104,6 +104,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 
 	while(old->region->next != NULL){
 		newas->region->next = kmalloc(sizeof(struct region));
+		newas->region->flag=old->region->flag;
 		newas->region->reg_st=old->region->reg_st;
 		newas->region->psize = old->region->psize;
 		newas->region->vbase = old->region->vbase;
@@ -138,9 +139,10 @@ as_destroy(struct addrspace *as)
 
 	while(as->ptable != NULL){  ////clean pagetable
 		tmp1 = as->ptable;
-		free_page(as->ptable->va);
+		page_free(as->ptable->va);
 		as->ptable->pa = 0;
 		as->ptable->va = 0;
+		as->ptable->PTE_P=0;
 		as->ptable = as->ptable->next;
 		temp1=tmp1;
 		kfree(temp1);
@@ -151,6 +153,7 @@ as_destroy(struct addrspace *as)
 		as->region->reg_st=0;///state
 		as->region->psize = 0;
 		as->region->vbase = 0;
+		as->region->flag=0;
 		as->region = as->region->next;
 		temp2 = tmp2;
 		kfree(temp2);
@@ -196,6 +199,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	}
 	tmp->vbase=vaddr;
 	tmp->psize=sz/PAGE_SIZE;
+	tmp->flag=0;
 	if(readable)tmp->reg_st=READ;
 	if(writeable)tmp->reg_st=WRITE;
 	if(executable)tmp->reg_st=EXECUTE;
@@ -207,10 +211,11 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		tmp1=tmp1->next;
 	}
 
-	for(int i=0;i<sz/PAGE_SIZE;i++){
+	for(int i=0;i<tmp->psize;i++){
 	tmp1->va=vaddr+i*PAGE_SIZE;
 
 	tmp1->pa=page_alloc();
+	tmp1->PTE_P=1;
 	//coremap update
 	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].va=tmp1->va;
 	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].as=as;

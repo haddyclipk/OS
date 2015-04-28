@@ -48,6 +48,7 @@ enum reg_state{
 struct PTE{
 	vaddr_t va;
 	paddr_t pa;
+	int PTE_P;
 	struct PTE *next;
 };
 
@@ -55,7 +56,7 @@ struct region{
 	vaddr_t vbase;
 	size_t psize;
 	enum reg_state reg_st;
-	int flag=0;
+	int flag;
 	struct region *next;
 };
 

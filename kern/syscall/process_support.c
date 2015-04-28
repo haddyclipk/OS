@@ -314,3 +314,10 @@ int sys_getpid( int *retval){
 	*retval=(int)curthread->t_pid;
 	return 0;
 }
+
+//void* sbrk(intptr_t amount, int *retval){
+//	vaddr_t heap=curthread->t_addrspace->heap_top;
+//	curthread->t_addrspace->heap_top=heap+amount;
+//}
+
+
