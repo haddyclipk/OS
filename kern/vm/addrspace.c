@@ -211,7 +211,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		tmp1=tmp1->next;
 	}
 
-	for(int i=0;i<tmp->psize;i++){
+	for(size_t i=0;i<tmp->psize;i++){
 	tmp1->va=vaddr+i*PAGE_SIZE;
 
 	tmp1->pa=page_alloc();

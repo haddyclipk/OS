@@ -147,7 +147,13 @@ void page_free(vaddr_t addr){
 void
 vm_tlbshootdown_all(void)
 {
-	panic("dumbvm tried to do tlb shootdown?!\n");
+	struct spinlock s_lock;
+	spinlock_init(&s_lock);
+	spinlock_acquire(&s_lock);
+	for(uint32_t i = 0; i<NUM_TLB; i++){
+		tlb_write(TLBHI_INVALID(i),TLBLO_INVALID(), i);
+	}
+	spinlock_release(&s_lock);
 }
 
 void
