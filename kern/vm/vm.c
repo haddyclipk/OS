@@ -75,7 +75,7 @@ vaddr_t page_nalloc(int npages){
 
 		}
 	}
-	if(coremap[i].chunk!=npages){lock_release(coremap_lk);return EFAULT;}
+	if(coremap[i].chunk!=npages){lock_release(coremap_lk);return 0;}
 	else {
 		for (int j=0;j<npages;j++){
 		make_page_avail((struct coremap_entry*)&coremap[i+j]);
@@ -168,8 +168,10 @@ int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
 	//check vaddr_t is valid
+		struct PTE *p2;
 		int flag=0;
-		paddr_t pad = 0;
+		int tlb_index;
+		//paddr_t pad = 0;
 		struct addrspace *as=curthread->t_addrspace;
 		struct region *reg=curthread->t_addrspace->region;
 
@@ -179,8 +181,6 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		KASSERT(as->region != NULL);
 		KASSERT(as->heap_base != 0);
 		KASSERT(as->heap_top != 0);
-		KASSERT(as->stack_base != 0);
-		KASSERT(as->stack_top != 0);
 		KASSERT((as->ptable->va & PAGE_FRAME) == as->ptable->va);
 
 
@@ -194,6 +194,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 		while (reg->next!=NULL){
 			if (faultaddress>=reg->vbase && faultaddress<=(reg->vbase+reg->psize)) flag=1;
+			reg=reg->next;
 		}
 		if (faultaddress>=as->heap_base && faultaddress<=as->heap_top) flag=1;
 		if (faultaddress>=as->stack_top && faultaddress<=as->stack_base) flag=1;
@@ -204,9 +205,15 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		if (faulttype==0){
 			spinlock_acquire(&s_lock);
 			while(p->next != NULL){
-				if(p->va == faultaddress && p->PTE_P == 1){
+				if(p->va == faultaddress ){
+					if( p->PTE_P == 1){
+
 					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
 				}
+					else{padr=page_alloc();
+					padr = padr | TLBLO_DIRTY | TLBLO_VALID;
+					}
+				break;}
 				p = p->next;
 			}
 			tlb_random(vadr, padr);
@@ -215,28 +222,51 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		//vm_write
 		if(faulttype==1){
 			spinlock_acquire(&s_lock);
-			while(p->next != NULL){
-				if(p->va == faultaddress && p->PTE_P == 1){
-					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
-				}
-				p = p->next;
-			}
-			tlb_random(vadr, padr);
-			spinlock_release(&s_lock);
+						while(p->next != NULL){
+							if(p->va == faultaddress ){
+								p2=p;
+								}
+							p=p->next;
+						}
+
+
+								if( p2->PTE_P == 1){
+
+								padr = p2->pa | TLBLO_DIRTY | TLBLO_VALID;
+							}
+								else{
+									padr=page_alloc();
+									padr = padr | TLBLO_DIRTY | TLBLO_VALID;
+								}
+
+
+
+						tlb_random(vadr, padr);
+						spinlock_release(&s_lock);
 		}
 		//vm_readonly
 		if(faulttype==2){
-			spinlock_acquire(&s_lock);
-			for(int i = 0; i<NUM_TLB; i++){
-				tlb_read(&vadr,&padr, i);
-				if(vadr & TLBLO_VALID) continue;
-
-				padr = faultaddress;
-				vadr = padr | TLBLO_DIRTY |TLBLO_VALID;
-
-				tlb_write(vadr, padr, i);
-				spinlock_release(&s_lock);
+			//p = curthread->t_addrspace->ptable;
+			while(p->next != NULL){
+				if(p->va == faultaddress){
+					p2 = p;
+				}
+				p = p->next;
 			}
+			if(p2->write!=1 )panic("Not writable");
+			spinlock_acquire(&s_lock);
+			tlb_index=tlb_probe(vadr,padr);
+
+//			for(int i = 0; i<NUM_TLB; i++){
+//				tlb_read(&vadr,&padr, i);
+
+
+				vadr= faultaddress;
+				padr = p2->pa | TLBLO_DIRTY |TLBLO_VALID;
+
+				tlb_write(vadr, padr, 1);
+				spinlock_release(&s_lock);
+				//coremap
 		}
 
 		return 0;

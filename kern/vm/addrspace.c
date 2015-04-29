@@ -57,12 +57,14 @@ as_create(void)
 	as->ptable->read=0;
 	as->ptable->write=0;
 	as->ptable->exe=0;
+	as->ptable->next = NULL;
 
 	as->region=kmalloc(sizeof(struct region));
 	as->region->exe=0;
 	as->region->read=0;
 	as->region->write=0;
 	as->region->flag=0;
+	as->region->next = NULL;
 
 	as->heap_base=0;
 	as->heap_top=0;
@@ -110,6 +112,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		newas->ptable->pa = old->ptable->pa;
 		newas->ptable->va = old->ptable->va;
 		newas->ptable = newas->ptable->next;
+		newas->ptable->next = NULL;
 		old->ptable = old->ptable->next;
 	}
 	old->ptable = temp1;
@@ -125,6 +128,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		newas->region->psize = old->region->psize;
 		newas->region->vbase = old->region->vbase;
 		newas->region = newas->region->next;
+		newas->region->next = NULL;
 		old->region = old->region->next;
 	}
 	old->region = temp3;
@@ -231,6 +235,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	tmp->next->read=0;
 	tmp->next->write=0;
 	tmp->next->exe=0;
+	tmp->next->next = NULL;
 
 
 	// update pagetable
@@ -258,6 +263,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	tmp1->next->read=0;
 	tmp1->next->write=0;
 	tmp1->next->exe=0;
+	tmp1->next->next = NULL;
 	}
 	//HEAP
 	as->heap_base=vaddr+sz;
@@ -311,8 +317,9 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	 * Write this.
 	 */
 
-	(void)as;
-
+	//(void)as;
+	as->stack_base= USERSTACK;
+	as->stack_top = USERSTACK;
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
 	
