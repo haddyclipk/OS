@@ -168,25 +168,78 @@ int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
 	//check vaddr_t is valid
-	int flag=0;
-	struct addrspace *as=curthread->t_addrspace;
-	struct region *reg=curthread->t_addrspace->region;
-	while (reg->next!=NULL){
-		if (faultaddress>=reg->vbase && faultaddress<=(reg->vbase+reg->psize)) flag=1;
-	}
-	if (faultaddress>=as->heap_base && faultaddress<=as->heap_top) flag=1;
-	if (faultaddress>=as->stack_top && faultaddress<=as->stack_base) flag=1;
-	if (flag==0) panic("faultaddress is invalid");
-	// check what fault it is
-	if (faulttype!=0 && faulttype!=1 && faulttype!=2){panic("unknown fault");}
-	//vm_read
-	if (faulttype==0){}
-	//vm_write
-	if(faulttype==1){}
-	//vm_readonly
-	if(faulttype==2){}
+		int flag=0;
+		paddr_t pad = 0;
+		struct addrspace *as=curthread->t_addrspace;
+		struct region *reg=curthread->t_addrspace->region;
 
-	return 0;
+		if(as == NULL) return EFAULT;
+
+		KASSERT(as->ptable != NULL);
+		KASSERT(as->region != NULL);
+		KASSERT(as->heap_base != 0);
+		KASSERT(as->heap_top != 0);
+		KASSERT(as->stack_base != 0);
+		KASSERT(as->stack_top != 0);
+		KASSERT((as->ptable->va & PAGE_FRAME) == as->ptable->va);
+
+
+		faultaddress &= PAGE_FRAME;
+
+		struct spinlock s_lock;
+		struct PTE *p = curthread->t_addrspace->ptable;
+		paddr_t padr = 0;
+		vaddr_t vadr = faultaddress;
+		spinlock_init(&s_lock);
+
+		while (reg->next!=NULL){
+			if (faultaddress>=reg->vbase && faultaddress<=(reg->vbase+reg->psize)) flag=1;
+		}
+		if (faultaddress>=as->heap_base && faultaddress<=as->heap_top) flag=1;
+		if (faultaddress>=as->stack_top && faultaddress<=as->stack_base) flag=1;
+		if (flag==0) panic("faultaddress is invalid");
+		// check what fault it is
+		if (faulttype!=0 && faulttype!=1 && faulttype!=2){panic("unknown fault");}
+		//vm_read
+		if (faulttype==0){
+			spinlock_acquire(&s_lock);
+			while(p->next != NULL){
+				if(p->va == faultaddress && p->PTE_P == 1){
+					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
+				}
+				p = p->next;
+			}
+			tlb_random(vadr, padr);
+			spinlock_release(&s_lock);
+		}
+		//vm_write
+		if(faulttype==1){
+			spinlock_acquire(&s_lock);
+			while(p->next != NULL){
+				if(p->va == faultaddress && p->PTE_P == 1){
+					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
+				}
+				p = p->next;
+			}
+			tlb_random(vadr, padr);
+			spinlock_release(&s_lock);
+		}
+		//vm_readonly
+		if(faulttype==2){
+			spinlock_acquire(&s_lock);
+			for(int i = 0; i<NUM_TLB; i++){
+				tlb_read(&vadr,&padr, i);
+				if(vadr & TLBLO_VALID) continue;
+
+				padr = faultaddress;
+				vadr = padr | TLBLO_DIRTY |TLBLO_VALID;
+
+				tlb_write(vadr, padr, i);
+				spinlock_release(&s_lock);
+			}
+		}
+
+		return 0;
 }
 
 //struct addrspace *
