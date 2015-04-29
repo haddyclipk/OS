@@ -162,7 +162,10 @@ vm_tlbshootdown(const struct tlbshootdown *ts)
 	(void)ts;
 	panic("dumbvm tried to do tlb shootdown?!\n");
 }
-
+static void bp()
+{
+	return ;
+}
 /* Fault handling function called by trap code */
 int
 vm_fault(int faulttype, vaddr_t faultaddress)
@@ -223,12 +226,13 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		if(faulttype==1){
 			spinlock_acquire(&s_lock);
 						while(p->next != NULL){
-							if(p->va == faultaddress ){
+							if(p->va < faultaddress && p->va+PAGE_SIZE){
+								bp();
 								p2=p;
 								}
 							p=p->next;
 						}
-
+						bp();
 
 								if( p2->PTE_P == 1){
 

@@ -68,8 +68,8 @@ as_create(void)
 
 	as->heap_base=0;
 	as->heap_top=0;
-	as->stack_base=0;
-	as->stack_top=0;
+	as->stack_base=USERSTACK;
+	as->stack_top=USERSTACK;
 
 	return as;
 }
