@@ -53,7 +53,17 @@ as_create(void)
 	 * Initialize as needed.
 	 */
 	as->ptable=kmalloc(sizeof(struct PTE));
+	as->ptable->PTE_P=0;
+	as->ptable->read=0;
+	as->ptable->write=0;
+	as->ptable->exe=0;
+
 	as->region=kmalloc(sizeof(struct region));
+	as->region->exe=0;
+	as->region->read=0;
+	as->region->write=0;
+	as->region->flag=0;
+
 	as->heap_base=0;
 	as->heap_top=0;
 	as->stack_base=0;
@@ -93,6 +103,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 
 	while(old->ptable->next != NULL){
 		newas->ptable->next = kmalloc(sizeof(struct PTE));
+		newas->ptable->read=old->ptable->read;
+		newas->ptable->write=old->ptable->write;
+		newas->ptable->exe=old->ptable->exe;
 		newas->ptable->PTE_P=old->ptable->PTE_P;
 		newas->ptable->pa = old->ptable->pa;
 		newas->ptable->va = old->ptable->va;
@@ -105,7 +118,10 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	while(old->region->next != NULL){
 		newas->region->next = kmalloc(sizeof(struct region));
 		newas->region->flag=old->region->flag;
-		newas->region->reg_st=old->region->reg_st;
+		newas->region->read=old->region->read;
+		newas->region->write=old->region->write;
+		newas->region->exe=old->region->exe;
+		//newas->region->reg_st=old->region->reg_st;
 		newas->region->psize = old->region->psize;
 		newas->region->vbase = old->region->vbase;
 		newas->region = newas->region->next;
@@ -143,6 +159,9 @@ as_destroy(struct addrspace *as)
 		as->ptable->pa = 0;
 		as->ptable->va = 0;
 		as->ptable->PTE_P=0;
+		as->ptable->read=0;
+		as->ptable->write=0;
+		as->ptable->exe=0;
 		as->ptable = as->ptable->next;
 		temp1=tmp1;
 		kfree(temp1);
@@ -150,7 +169,10 @@ as_destroy(struct addrspace *as)
 
 	while(as->region!= NULL){  //clean region
 		tmp2 = as->region;
-		as->region->reg_st=0;///state
+		as->region->read=0;
+		as->region->write=0;
+		as->region->exe=0;
+		//as->region->reg_st=0;///state
 		as->region->psize = 0;
 		as->region->vbase = 0;
 		as->region->flag=0;
@@ -200,10 +222,16 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	tmp->vbase=vaddr;
 	tmp->psize=sz/PAGE_SIZE;
 	tmp->flag=0;
-	if(readable)tmp->reg_st=READ;
-	if(writeable)tmp->reg_st=WRITE;
-	if(executable)tmp->reg_st=EXECUTE;
+	if(readable==4)tmp->read=1;
+	if(writeable==2)tmp->write=1;
+	if(executable==1)tmp->exe=1;
+	//initial next region
 	tmp->next=kmalloc(sizeof(struct region));
+	tmp->next->flag=0;
+	tmp->next->read=0;
+	tmp->next->write=0;
+	tmp->next->exe=0;
+
 
 	// update pagetable
 	struct PTE *tmp1=as->ptable;
@@ -211,8 +239,12 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		tmp1=tmp1->next;
 	}
 
-	for(int i=0;i<tmp->psize;i++){
+	for(size_t i=0;i<tmp->psize;i++){
 	tmp1->va=vaddr+i*PAGE_SIZE;
+	//update permission
+	tmp1->read=tmp->read;
+	tmp1->write=tmp->write;
+	tmp1->exe=tmp->exe;
 
 	tmp1->pa=page_alloc();
 	tmp1->PTE_P=1;
@@ -220,7 +252,12 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].va=tmp1->va;
 	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].as=as;
 	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].pgstate=DIRTY;
+	//inital next PTE
 	tmp1->next=kmalloc(sizeof(struct PTE));
+	tmp1->next->PTE_P=0;
+	tmp1->next->read=0;
+	tmp1->next->write=0;
+	tmp1->next->exe=0;
 	}
 	//HEAP
 	as->heap_base=vaddr+sz;
@@ -230,9 +267,9 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 //	(void)as;
 //	(void)vaddr;
 //	(void)sz;
-	(void)readable;
-	(void)writeable;
-	(void)executable;
+//	(void)readable;
+//	(void)writeable;
+//	(void)executable;
 	return 0;
 }
 
@@ -244,7 +281,7 @@ as_prepare_load(struct addrspace *as)
 	 */
 	struct region *tmp=as->region;
 	while (tmp->next!=NULL){
-		if (tmp->reg_st==READ) {tmp->reg_st=EXECUTE;tmp->flag=1;}
+		if (tmp->write==0) {tmp->write=1;tmp->flag=1;}
 		tmp=tmp->next;
 	}
 	//(void)as;
@@ -259,7 +296,7 @@ as_complete_load(struct addrspace *as)
 	 */
 	struct region *tmp=as->region;
 		while (tmp->next!=NULL){
-			if (tmp->flag==1) {tmp->reg_st=READ;}
+			if (tmp->flag==1) {tmp->write=0;}
 			tmp=tmp->next;
 		}
 
