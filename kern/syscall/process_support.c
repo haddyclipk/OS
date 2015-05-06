@@ -156,21 +156,21 @@ int sys_execv(int *retval,const char *program, char **args){
 	
 	int i=0;
 	if(args==0x0) {kfree(kprogram);return EFAULT;}
-	char **tmp=(char **)kmalloc(32*sizeof(char*));
-	char *tmpst=kmalloc(128*sizeof(char));
-	if(tmpst==NULL){*retval=-1;return ENOMEM; }
-	for (int z=0;z<32;z++){
-	//kbuff[i]=kmalloc(char);
-	//while(*(args+z*4)!=NULL){
-	err=copyin((userptr_t)(args+4*z),(tmp+z*4),sizeof(char*));
-	
-	if (err) {kfree(tmp);kfree(tmpst);return EFAULT;}
-	err=copyinstr((userptr_t)tmp[z],tmpst,128, &len);
-	if (err) {kfree(tmp);kfree(tmpst);return EFAULT;}
-	//}
-	}
-	kfree(tmp);
-	kfree(tmpst);
+//	char **tmp=(char **)kmalloc(32*sizeof(char*));
+//	char *tmpst=kmalloc(128*sizeof(char));
+//	if(tmpst==NULL){*retval=-1;return ENOMEM; }
+//	for (int z=0;z<32;z++){
+//	//kbuff[i]=kmalloc(char);
+//	//while(*(args+z*4)!=NULL){
+//	err=copyin((userptr_t)(args+4*z),(tmp+z*4),sizeof(char*));
+//
+//	if (err) {kfree(tmp);kfree(tmpst);return EFAULT;}
+//	err=copyinstr((userptr_t)tmp[z],tmpst,128, &len);
+//	if (err) {kfree(tmp);kfree(tmpst);return EFAULT;}
+//	//}
+//	}
+//	kfree(tmp);
+//	kfree(tmpst);
 	while(args[i]!=NULL){
 	i++;}
 	int num=i;

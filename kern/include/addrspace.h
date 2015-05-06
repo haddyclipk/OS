@@ -49,6 +49,7 @@ struct PTE{
 	vaddr_t va;
 	paddr_t pa;
 	char PTE_P;
+	//int pagenum;
 	char read;
 	char write;
 	char exe;
@@ -85,10 +86,12 @@ struct addrspace {
 #else
         struct PTE *ptable;
         struct region *region;
+        int pagenum;
         vaddr_t heap_base;
         vaddr_t heap_top;
         vaddr_t stack_top;
         vaddr_t stack_base;
+
         /* Put stuff here for your VM system */
 #endif
 };

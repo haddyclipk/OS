@@ -44,6 +44,7 @@ enum page_state{
 
 struct coremap_entry{
 	vaddr_t va;
+	vaddr_t pa;
 	struct addrspace* as;
 	enum page_state pgstate;
 	int chunk;
@@ -53,10 +54,10 @@ struct coremap_entry* coremap;
 
 
 
-vaddr_t page_alloc(void);
+vaddr_t page_alloc(vaddr_t va);
 vaddr_t page_nalloc(int npages);
 void page_free(vaddr_t va);
-void make_page_avail(struct coremap_entry* coremap);
+void make_page_avail(struct coremap_entry *coremap);
 #include <machine/vm.h>
 
 /* Fault-type arguments to vm_fault() */

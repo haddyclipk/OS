@@ -38,7 +38,7 @@
  * assignment, this file is not compiled or linked or in any way
  * used. The cheesy hack versions in dumbvm.c are used instead.
  */
-
+//extern struct spinlock coremap_lk;
 struct addrspace *
 as_create(void)
 {
@@ -52,23 +52,25 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
-	as->ptable=kmalloc(sizeof(struct PTE));
-	as->ptable->PTE_P=0;
-	as->ptable->read=0;
-	as->ptable->write=0;
-	as->ptable->exe=0;
-	as->ptable->next = NULL;
 
-	as->region=kmalloc(sizeof(struct region));
-	as->region->exe=0;
-	as->region->read=0;
-	as->region->write=0;
-	as->region->flag=0;
-	as->region->next = NULL;
+	as->ptable=NULL;//kmalloc(sizeof(struct PTE));
+	as->pagenum=0;
+//	as->ptable->PTE_P=0;
+//	as->ptable->read=0;
+//	as->ptable->write=0;
+//	as->ptable->exe=0;
+//	as->ptable->next = NULL;
+
+	as->region=NULL;//kmalloc(sizeof(struct region));
+//	as->region->exe=0;
+//	as->region->read=0;
+//	as->region->write=0;
+//	as->region->flag=0;
+//	as->region->next = NULL;
 
 	as->heap_base=0;
 	as->heap_top=0;
-	as->stack_base=USERSTACK;
+	as->stack_base=USERSTACK-12*PAGE_SIZE;
 	as->stack_top=USERSTACK;
 
 	return as;
@@ -84,58 +86,48 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		return ENOMEM;
 	}
 
-	//             added by junmo
+
 	newas->heap_base = old->heap_base;
 	newas->heap_top = old->heap_top;
 	newas->stack_base = old->stack_base;
 	newas->stack_top = old->stack_top;
-	//
-//	if(old->ptable == NULL) return ENOMEM;
-//		newas->ptable->pa = old->ptable->pa;
-//		newas->ptable->va = old->ptable->va;
+	newas->pagenum=old->pagenum;
+	newas->region=old->region;
+	newas->ptable=old->ptable;
+//	struct PTE * temp1=old->ptable;
 //
-//	if(old->region == NULL) return ENOMEM;
-//		newas->region = old->region;
-	//
-	struct PTE * temp1=old->ptable;
-	struct PTE * temp2=newas->ptable;
-
-	struct region * temp3 = old->region;
-	struct region * temp4 = newas->region;
-
-	while(old->ptable->next != NULL){
-		newas->ptable->next = kmalloc(sizeof(struct PTE));
-		newas->ptable->read=old->ptable->read;
-		newas->ptable->write=old->ptable->write;
-		newas->ptable->exe=old->ptable->exe;
-		newas->ptable->PTE_P=old->ptable->PTE_P;
-		newas->ptable->pa = old->ptable->pa;
-		newas->ptable->va = old->ptable->va;
-		newas->ptable = newas->ptable->next;
-		newas->ptable->next = NULL;
-		old->ptable = old->ptable->next;
-	}
-	old->ptable = temp1;
-	newas->ptable = temp2;
-
-	while(old->region->next != NULL){
-		newas->region->next = kmalloc(sizeof(struct region));
-		newas->region->flag=old->region->flag;
-		newas->region->read=old->region->read;
-		newas->region->write=old->region->write;
-		newas->region->exe=old->region->exe;
-		//newas->region->reg_st=old->region->reg_st;
-		newas->region->psize = old->region->psize;
-		newas->region->vbase = old->region->vbase;
-		newas->region = newas->region->next;
-		newas->region->next = NULL;
-		old->region = old->region->next;
-	}
-	old->region = temp3;
-	newas->region = temp4;
-	/*
-	 * Write this.
-	 */
+//
+//	struct PTE *tmp2;
+//	struct region * temp3 = old->region;
+//	struct region * temp4;
+//
+//	if(old->ptable==NULL) return 0;
+//	newas->ptable=kmalloc(sizeof(struct PTE));
+//	tmp2=newas->ptable;
+//	memcpy(tmp2,old->ptable,sizeof(struct PTE));
+//	old->ptable=old->ptable->next;
+//	while(old->ptable!= NULL){
+//		tmp2->next=kmalloc(sizeof(struct PTE));
+//		tmp2=tmp2->next;
+//		memcpy(tmp2,old->ptable,sizeof(struct PTE));
+//
+//
+//		old->ptable = old->ptable->next;
+//	}
+//	old->ptable = temp1;
+//
+//	newas->region=kmalloc(sizeof(struct region));
+//	temp4=newas->region;
+//	memcpy(temp4, old->region,sizeof(struct region));
+//	old->region=old->region->next;
+//	while(old->region != NULL){
+//		temp4->next= kmalloc(sizeof(struct region));
+//		temp4=temp4->next;
+//		memcpy(temp4,old->region,sizeof(struct region));
+//
+//		old->region = old->region->next;
+//	}
+//	old->region = temp3;
 
 	*ret = newas;
 	return 0;
@@ -152,38 +144,27 @@ as_destroy(struct addrspace *as)
 	as->stack_base = 0;
 	as->stack_top = 0;
 
-	struct PTE * tmp1 = NULL;
-	struct PTE * temp1 = NULL;
-	struct region * tmp2 = NULL;
-	struct region * temp2 = NULL;
+	struct PTE * pt = NULL;
+	//struct PTE * temp1 = NULL;
+	struct region * reg;
+	//struct region * temp2 = NULL;
 
 	while(as->ptable != NULL){  ////clean pagetable
-		tmp1 = as->ptable;
+		pt = as->ptable;
 		page_free(as->ptable->va);
-		as->ptable->pa = 0;
-		as->ptable->va = 0;
-		as->ptable->PTE_P=0;
-		as->ptable->read=0;
-		as->ptable->write=0;
-		as->ptable->exe=0;
+		bzero(pt, sizeof(struct PTE));
 		as->ptable = as->ptable->next;
-		temp1=tmp1;
-		kfree(temp1);
+
+		kfree(pt);
 	}
 
-	while(as->region!= NULL){  //clean region
-		tmp2 = as->region;
-		as->region->read=0;
-		as->region->write=0;
-		as->region->exe=0;
-		//as->region->reg_st=0;///state
-		as->region->psize = 0;
-		as->region->vbase = 0;
-		as->region->flag=0;
-		as->region = as->region->next;
-		temp2 = tmp2;
-		kfree(temp2);
-	}
+	while (as->region != NULL)
+			{
+				reg = as->region;
+				bzero(reg,sizeof(struct region));
+				as->region = as->region->next;
+				kfree(reg);
+			}
 	
 	kfree(as);
 }
@@ -208,6 +189,30 @@ as_activate(struct addrspace *as)
  * moment, these are ignored. When you write the VM system, you may
  * want to implement them.
  */
+static void addpte(struct PTE *tmp1, int i, vaddr_t vaddr,  struct addrspace *as,int readable, int writeable, int executable){
+	tmp1->va=vaddr+i*PAGE_SIZE;
+//update permission
+	if(readable==4)tmp1->read=1;
+	if(writeable==2)tmp1->write=1;
+	if(executable==1)tmp1->exe=1;
+//spinlock_acquire(&coremap_lk);
+
+tmp1->pa=KVADDR_TO_PADDR(page_alloc(tmp1->va));
+//int j=(tmp1->pa)/PAGE_SIZE;
+tmp1->PTE_P=1;
+tmp1->next=NULL;
+as->pagenum++;
+//coremap update
+//coremap[j].pid=curthread->t_pid;
+//coremap[j].va=tmp1->va;
+//coremap[j].as=as;
+//coremap[j].pgstate=DIRTY;
+//spinlock_release(&coremap_lk);
+}
+static void ap()
+{
+	return ;
+}
 int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		 int readable, int writeable, int executable)
@@ -218,52 +223,61 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	sz += vaddr & ~(vaddr_t)PAGE_FRAME; //Aligning Regions
 	vaddr &= PAGE_FRAME;
 	sz = (sz + PAGE_SIZE - 1) & PAGE_FRAME; //length
-	//region
-	struct region *tmp=as->region;
+
+	int count;
+	struct region *tmp=NULL;
+	struct region *reg = kmalloc(sizeof(struct region));
+	KASSERT(reg!=NULL);
+
+	reg->vbase = vaddr;
+	reg->psize = sz / PAGE_SIZE;
+	reg->flag=0;
+	reg->next=NULL;
+	if(readable==4)reg->read=1;
+	if(writeable==2)reg->write=1;
+	if(executable==1)reg->exe=1;
+	//check if 1st one
+	if(as->region==NULL){as->region=reg;count=as->region->psize;}
+	else{tmp=as->region;
 	while(tmp->next != NULL){
-		tmp=tmp->next;
+			tmp=tmp->next;
+		}
+		tmp->next=reg;
+		count=reg->psize;
 	}
-	tmp->vbase=vaddr;
-	tmp->psize=sz/PAGE_SIZE;
-	tmp->flag=0;
-	if(readable==4)tmp->read=1;
-	if(writeable==2)tmp->write=1;
-	if(executable==1)tmp->exe=1;
-	//initial next region
-	tmp->next=kmalloc(sizeof(struct region));
-	tmp->next->flag=0;
-	tmp->next->read=0;
-	tmp->next->write=0;
-	tmp->next->exe=0;
-	tmp->next->next = NULL;
+
+
+
+
 
 
 	// update pagetable
-	struct PTE *tmp1=as->ptable;
-	while(tmp1->next!=NULL){
+	struct PTE *PT= as->ptable;
+	struct PTE *pt1=kmalloc(sizeof(struct PTE) );
+	KASSERT(pt1!=NULL);
+	addpte(pt1,0,vaddr,as,readable,writeable, executable);
+	struct PTE *tmp1=pt1;
+ap();
+	for(int i=1;i<count;i++){
+		ap();
+
+		tmp1->next=kmalloc(sizeof(struct PTE));
 		tmp1=tmp1->next;
+		KASSERT(tmp1!=NULL);
+
+		addpte(tmp1,i,vaddr,as,readable,writeable, executable);
+		ap();
+	//coremap update
+
 	}
 
-	for(size_t i=0;i<tmp->psize;i++){
-	tmp1->va=vaddr+i*PAGE_SIZE;
-	//update permission
-	tmp1->read=tmp->read;
-	tmp1->write=tmp->write;
-	tmp1->exe=tmp->exe;
-
-	tmp1->pa=page_alloc();
-	tmp1->PTE_P=1;
-	//coremap update
-	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].va=tmp1->va;
-	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].as=as;
-	coremap[KVADDR_TO_PADDR(tmp1->pa)/PAGE_SIZE].pgstate=DIRTY;
-	//inital next PTE
-	tmp1->next=kmalloc(sizeof(struct PTE));
-	tmp1->next->PTE_P=0;
-	tmp1->next->read=0;
-	tmp1->next->write=0;
-	tmp1->next->exe=0;
-	tmp1->next->next = NULL;
+	if (as->ptable==NULL){as->ptable=pt1;}
+	else{while(PT->next!=NULL){
+			PT=PT->next;
+			ap();
+		}
+	PT->next=pt1;
+	ap();
 	}
 	//HEAP
 	as->heap_base=vaddr+sz;
@@ -286,7 +300,7 @@ as_prepare_load(struct addrspace *as)
 	 * Write this.
 	 */
 	struct region *tmp=as->region;
-	while (tmp->next!=NULL){
+	while (tmp!=NULL){
 		if (tmp->write==0) {tmp->write=1;tmp->flag=1;}
 		tmp=tmp->next;
 	}
@@ -301,7 +315,7 @@ as_complete_load(struct addrspace *as)
 	 * Write this.
 	 */
 	struct region *tmp=as->region;
-		while (tmp->next!=NULL){
+		while (tmp!=NULL){
 			if (tmp->flag==1) {tmp->write=0;}
 			tmp=tmp->next;
 		}
@@ -318,10 +332,10 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	 */
 
 	//(void)as;
-	as->stack_base= USERSTACK;
-	as->stack_top = USERSTACK;
+	//as->stack_base= USERSTACK;
+	//as->stack_top = USERSTACK;
 	/* Initial user-level stack pointer */
-	*stackptr = USERSTACK;
+	*stackptr = as->stack_top;
 	
 	return 0;
 }
