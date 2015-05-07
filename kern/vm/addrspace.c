@@ -75,7 +75,23 @@ as_create(void)
 
 	return as;
 }
-
+static void ptecpy(struct PTE *new,struct PTE *old){
+	new->PTE_P=old->PTE_P;
+	new->va=old->va;
+	new->pa=KVADDR_TO_PADDR(page_alloc(old->va));
+	memmove((void *)PADDR_TO_KVADDR(new->pa),(const void *)PADDR_TO_KVADDR(old->pa),PAGE_SIZE);
+	new->read=old->read;
+	new->write=old->write;
+	new->exe=old->exe;
+}
+static void regcpy(struct region *new,struct region *old){
+	new->vbase=old->vbase;
+	new->flag=old->flag;
+	new->psize=old->psize;
+	new->read=old->read;
+	new->write=old->write;
+	new->exe=old->exe;
+}
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
@@ -92,42 +108,49 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	newas->stack_base = old->stack_base;
 	newas->stack_top = old->stack_top;
 	newas->pagenum=old->pagenum;
-	newas->region=old->region;
-	newas->ptable=old->ptable;
-//	struct PTE * temp1=old->ptable;
-//
-//
-//	struct PTE *tmp2;
-//	struct region * temp3 = old->region;
-//	struct region * temp4;
-//
-//	if(old->ptable==NULL) return 0;
-//	newas->ptable=kmalloc(sizeof(struct PTE));
-//	tmp2=newas->ptable;
-//	memcpy(tmp2,old->ptable,sizeof(struct PTE));
-//	old->ptable=old->ptable->next;
-//	while(old->ptable!= NULL){
-//		tmp2->next=kmalloc(sizeof(struct PTE));
-//		tmp2=tmp2->next;
-//		memcpy(tmp2,old->ptable,sizeof(struct PTE));
-//
-//
-//		old->ptable = old->ptable->next;
-//	}
-//	old->ptable = temp1;
-//
-//	newas->region=kmalloc(sizeof(struct region));
-//	temp4=newas->region;
-//	memcpy(temp4, old->region,sizeof(struct region));
-//	old->region=old->region->next;
-//	while(old->region != NULL){
-//		temp4->next= kmalloc(sizeof(struct region));
-//		temp4=temp4->next;
-//		memcpy(temp4,old->region,sizeof(struct region));
-//
-//		old->region = old->region->next;
-//	}
-//	old->region = temp3;
+
+	//newas->region=old->region;
+	//newas->ptable=old->ptable;
+//	int pgnumber=old->pagenum;
+//	newas->ptable=kmalloc(pgnumber*sizeof(struct PTE));
+//	memcpy(newas->ptable, old->ptable,pgnumber*sizeof(struct PTE));
+
+		struct PTE * temp1=old->ptable;
+
+
+	struct PTE *tmp2;
+	struct region * temp3 = old->region;
+	struct region * temp4;
+	if(old->region==NULL) return 0;
+	if(old->ptable==NULL) return 0;
+	newas->ptable=kmalloc(sizeof(struct PTE));
+	tmp2=newas->ptable;
+	ptecpy(tmp2,old->ptable);
+	old->ptable=old->ptable->next;
+	while(old->ptable!= NULL){
+		tmp2->next=kmalloc(sizeof(struct PTE));
+		tmp2=tmp2->next;
+		ptecpy(tmp2,old->ptable);
+
+
+		old->ptable = old->ptable->next;
+	}
+	tmp2->next=NULL;
+	old->ptable = temp1;
+
+	newas->region=kmalloc(sizeof(struct region));
+	temp4=newas->region;
+	regcpy(temp4, old->region);
+	old->region=old->region->next;
+	while(old->region != NULL){
+		temp4->next= kmalloc(sizeof(struct region));
+		temp4=temp4->next;
+		regcpy(temp4,old->region);
+
+		old->region = old->region->next;
+	}
+	temp4->next=NULL;
+	old->region = temp3;
 
 	*ret = newas;
 	return 0;
@@ -152,16 +175,16 @@ as_destroy(struct addrspace *as)
 	while(as->ptable != NULL){  ////clean pagetable
 		pt = as->ptable;
 		page_free(as->ptable->va);
-		bzero(pt, sizeof(struct PTE));
+		as->ptable->va=0;
 		as->ptable = as->ptable->next;
-
+		//bzero(pt, sizeof(struct PTE));
 		kfree(pt);
 	}
 
 	while (as->region != NULL)
 			{
 				reg = as->region;
-				bzero(reg,sizeof(struct region));
+				//bzero(reg,sizeof(struct region));
 				as->region = as->region->next;
 				kfree(reg);
 			}
@@ -280,7 +303,7 @@ ap();
 	ap();
 	}
 	//HEAP
-	as->heap_base=vaddr+sz;
+	as->heap_base=vaddr+(sz/PAGE_SIZE)*PAGE_SIZE;
 	as->heap_top=as->heap_base;
 
 

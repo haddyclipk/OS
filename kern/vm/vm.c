@@ -99,7 +99,7 @@ vaddr_t page_nalloc(int npages){
 		coremap[i+j].va=coremap[i+j].pa;
 		coremap[i+j].pid=curthread->t_pid;
 		coremap[i+j].pgstate=DIRTY;
-		coremap[i+j].as=curthread->t_addrspace;
+		coremap[i+j].as=NULL;
 		}
 	}
 	spinlock_release(&coremap_lk);
@@ -258,12 +258,12 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		//cp();
 		//KASSERT((as->ptable->pa & PAGE_FRAME) == as->ptable->pa);
 
-				struct region *reg=curthread->t_addrspace->region;
+				struct region *reg=as->region;
 		vaddr_t vadr = faultaddress;
 		faultaddress &= PAGE_FRAME;
 
 		struct spinlock s_lock;
-		struct PTE *p = curthread->t_addrspace->ptable;
+		struct PTE *p = as->ptable;
 		paddr_t padr = 0;
 		//vaddr_t vadr = faultaddress;
 		spinlock_init(&s_lock);
