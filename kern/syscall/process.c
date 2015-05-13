@@ -16,12 +16,12 @@
 #include <vnode.h>
 #include <kern/process.h>
 #include <kern/filesys.h>
-
+struct spinlock pt_lk=SPINLOCK_INITIALIZER;
  //void thread_destroy(struct thread *thread);
 struct process *ptable[256];
 
 pid_t pid_alloc(void){
-	
+	spinlock_acquire(&pt_lk);
 	for (int i=2; i<256; i++){
 		if (ptable[i]==NULL){
 		return (pid_t)i;
@@ -50,6 +50,7 @@ int  process_create(pid_t pid, struct thread *thread){
 		//	return ENOMEM;
 		//}
 		ptable[pid]=proc;
+		spinlock_release(&pt_lk);
 		return 0;
 }
 

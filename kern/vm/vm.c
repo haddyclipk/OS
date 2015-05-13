@@ -37,7 +37,7 @@ void vm_bootstrap(void){
 	ram_getsize(&first,&last);
 	pnum=last/PAGE_SIZE;
 	coremap=(struct coremap_entry*)PADDR_TO_KVADDR(first);
-	freeadrs= first+pnum*sizeof(struct coremap_entry);
+	freeadrs= first+pnum*sizeof(struct coremap_entry)+PAGE_SIZE;
 	free_start=freeadrs/PAGE_SIZE;
 	for (int i=0; i<pnum;i++){
 		coremap[i].va=0;
@@ -107,7 +107,7 @@ vaddr_t page_nalloc(int npages){
 
 
 }
-vaddr_t page_alloc(vaddr_t va){
+vaddr_t page_alloc(struct addrspace* newas,vaddr_t va){
 
 	//paddr_t t=0;
 	//vaddr_t v;
@@ -125,7 +125,7 @@ vaddr_t page_alloc(vaddr_t va){
 	coremap[i].pid=curthread->t_pid;
 	coremap[i].va=va;
 	coremap[i].pgstate=DIRTY;
-	coremap[i].as=curthread->t_addrspace;//update addresspace
+	coremap[i].as=newas;//update addresspace
 	spinlock_release(&coremap_lk);
 	return PADDR_TO_KVADDR(i*PAGE_SIZE);
 
@@ -143,27 +143,21 @@ vaddr_t page_alloc(vaddr_t va){
 // }
 void free_kpages(vaddr_t addr){
 	addr&=PAGE_FRAME;
-//	struct PTE *pt=curthread->t_addrspace->ptable;
-//	int count=curthread->t_addrspace->pagenum;
-//	int i;
-//	int k=0;
-//	for (i=0;i<count;i++){if(pt->va==addr) {k=pt->pa/PAGE_SIZE;}
-//	pt=pt->next;}
-//	KASSERT(k!=0);
+
 	int i;
 	spinlock_acquire(&coremap_lk);
 	for (i=free_start;i<pnum;i++){
 		if(coremap[i].va==addr&&coremap[i].pid==curthread->t_pid)break;
 	}
-	if(coremap[i].va!=addr) {spinlock_release(&coremap_lk);return;}
+	if(i==pnum) {spinlock_release(&coremap_lk);return;}
 	//coremap[i].as->ptable
-	if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
+	//if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
 
 	int chunk=coremap[i].chunk;
 
 	for (int j=0;j<chunk;j++){
 		//page_free(addr+i*PAGE_SIZE);
-		coremap[i+j].pid=0;
+		coremap[i+j].pid=-1;
 		coremap[i+j].pgstate=FREE;
 		coremap[i+j].chunk=1;
 
@@ -184,11 +178,11 @@ void page_free(vaddr_t addr){
 //		pt=pt->next;}
 //		KASSERT(k!=0);
 		spinlock_acquire(&coremap_lk);
-	for (i=free_start;i<pnum;i++){
+	for (i=0;i<pnum;i++){
 		if(coremap[i].va==addr&&coremap[i].pid==curthread->t_pid)break;
 	}
 	//KASSERT(i!=pnum);
-	if(coremap[i].va!=addr) {spinlock_release(&coremap_lk);return;}
+	if(i==pnum) {spinlock_release(&coremap_lk);return;}
 	//KASSERT(coremap[i].pgstate!=FIXED);
 	if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
 
@@ -229,10 +223,7 @@ static void bp()
 {
 	return ;
 }
-static void cp()
-{
-	return ;
-}
+//void updateCoremap(){}
 
 /* Fault handling function called by trap code */
 int
@@ -276,7 +267,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 				bp();
 				if ((vadr>=as->heap_base) && vadr<(as->heap_top)) flag=1;
 				if (vadr>=(as->stack_base) && vadr<(as->stack_top)) flag=1;
-				if (flag==0) {cp();panic("flag=0");}
+				if (flag==0) {panic("0ddddddd");}
 
 		// check what fault it is
 		if (faulttype!=0 && faulttype!=1 && faulttype!=2){panic("unknown fault");}
@@ -294,22 +285,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 						//else padr = p->pa | TLBLO_VALID;
 					}
 				}
-//					else{p->pa=KVADDR_TO_PADDR(page_alloc());
-//					int j=(p->pa)/PAGE_SIZE;
-//					p->PTE_P=1;
-//					//p->next=NULL;
-//					//coremap update
-//					spinlock_acquire(&coremap_lk);
-//					coremap[j].va=p->va;
-//					coremap[j].as=as;
-//					coremap[j].pgstate=DIRTY;
-//					spinlock_release(&coremap_lk);
-//					//if(p->write==1)
-//					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
-//					//KASSERT((padr & PAGE_FRAME) == padr);//else padr = p->pa | TLBLO_VALID;
-//					}
-//				break;}
-
+//
 				p = p->next;
 			}
 			if(padr==0) {tmp->next=kmalloc(sizeof(struct PTE));
@@ -320,7 +296,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			p->va=faultaddress;
 			p->PTE_P=1;
 
-			p->pa=KVADDR_TO_PADDR(page_alloc(faultaddress));
+			p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
 			as->pagenum++;
 
 			//int j=(p->pa)/PAGE_SIZE;

@@ -32,7 +32,7 @@
 #include <lib.h>
 #include <addrspace.h>
 #include <vm.h>
-
+#include <current.h>
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
  * assignment, this file is not compiled or linked or in any way
@@ -75,10 +75,10 @@ as_create(void)
 
 	return as;
 }
-static void ptecpy(struct PTE *new,struct PTE *old){
+static void ptecpy(struct addrspace* newas,struct PTE *new,struct PTE *old){
 	new->PTE_P=old->PTE_P;
 	new->va=old->va;
-	new->pa=KVADDR_TO_PADDR(page_alloc(old->va));
+	new->pa=KVADDR_TO_PADDR(page_alloc(newas,old->va));
 	memmove((void *)PADDR_TO_KVADDR(new->pa),(const void *)PADDR_TO_KVADDR(old->pa),PAGE_SIZE);
 	new->read=old->read;
 	new->write=old->write;
@@ -93,7 +93,7 @@ static void regcpy(struct region *new,struct region *old){
 	new->exe=old->exe;
 }
 int
-as_copy(struct addrspace *old, struct addrspace **ret)
+as_copy( struct addrspace *old, struct addrspace **ret)
 {
 	struct addrspace *newas;
 
@@ -125,12 +125,12 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	if(old->ptable==NULL) return 0;
 	newas->ptable=kmalloc(sizeof(struct PTE));
 	tmp2=newas->ptable;
-	ptecpy(tmp2,old->ptable);
+	ptecpy(newas,tmp2,old->ptable);
 	old->ptable=old->ptable->next;
 	while(old->ptable!= NULL){
 		tmp2->next=kmalloc(sizeof(struct PTE));
 		tmp2=tmp2->next;
-		ptecpy(tmp2,old->ptable);
+		ptecpy(newas,tmp2,old->ptable);
 
 
 		old->ptable = old->ptable->next;
@@ -188,7 +188,7 @@ as_destroy(struct addrspace *as)
 				as->region = as->region->next;
 				kfree(reg);
 			}
-	
+	as->pagenum=0;
 	kfree(as);
 }
 
@@ -220,7 +220,7 @@ static void addpte(struct PTE *tmp1, int i, vaddr_t vaddr,  struct addrspace *as
 	if(executable==1)tmp1->exe=1;
 //spinlock_acquire(&coremap_lk);
 
-tmp1->pa=KVADDR_TO_PADDR(page_alloc(tmp1->va));
+tmp1->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace,tmp1->va));
 //int j=(tmp1->pa)/PAGE_SIZE;
 tmp1->PTE_P=1;
 tmp1->next=NULL;

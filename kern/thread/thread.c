@@ -159,6 +159,7 @@ thread_create(const char *name)
 	thread->fdtable[i]=NULL;
 	}
 	pid_t k=pid_alloc();
+
 	thread->t_pid=k;
 	
 	int err=process_create(k,thread);

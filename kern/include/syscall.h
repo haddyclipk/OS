@@ -72,7 +72,7 @@ int sys_execv(int *retval,const char *program, char **args);
 int sys_getpid(int *retval);
 int sys__exit(int exitcode);
 int sys_waitpid(int *retval,pid_t pid, int *status, int options);
-//void* sys_sbrk(intptr_t amount,int *retval);
+int sys_sbrk(intptr_t amount,int *retval);
 
 
 #endif /* _SYSCALL_H_ */

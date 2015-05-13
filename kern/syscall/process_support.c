@@ -30,7 +30,8 @@ int sys_fork(struct trapframe *tf,int *retval ){
 	return ENOMEM;
 	}
 	struct addrspace *cspace=NULL;
-	
+	//int k =pid_alloc();
+	//ptable[k]=(void*)(-3);
 	memcpy(ktf,tf,sizeof(struct trapframe));
 	 int err=as_copy(curthread->t_addrspace,&cspace);
 	if (err){ 	
@@ -53,6 +54,7 @@ int sys_fork(struct trapframe *tf,int *retval ){
 	
 	
 	ptable[cthread->t_pid]->ppid=curthread->t_pid;
+
 	*retval=(int)cthread->t_pid;
 	//kfree(ktf);
 	return 0;
@@ -72,6 +74,9 @@ child_fork_entry(void *data1, unsigned long data2 ){
 	curthread->t_addrspace =space;
 	//curthread->t_addrspace = as_create();
 	
+	int i=0;
+	for(i=2;i<256;i++){if (ptable[i]->self->t_addrspace==curthread->t_addrspace ) break; }
+	for(int k=63;k<128;k++){if(coremap[k].as==curthread->t_addrspace)coremap[k].pid=i;}
 	//memcpy(curthread->t_addrspace, sp, sizeof(struct addrspace));
 	as_activate(curthread->t_addrspace);
 	//tf->tf_a1=1;
@@ -146,7 +151,8 @@ int sys_execv(int *retval,const char *program, char **args){
 
 
 	size_t len;
-	//if (args==NULL) return EFAULT;
+	if (program==NULL) return EFAULT;
+	if (args==NULL) return EFAULT;
 	char *kprogram=kmalloc(PATH_MAX*sizeof(char));
 	if(kprogram==NULL){*retval=-1;return ENOMEM; }
 	
@@ -315,9 +321,18 @@ int sys_getpid( int *retval){
 	return 0;
 }
 
-//void* sbrk(intptr_t amount, int *retval){
-//	vaddr_t heap=curthread->t_addrspace->heap_top;
-//	curthread->t_addrspace->heap_top=heap+amount;
-//}
+int sys_sbrk(intptr_t amount, int *retval){
+	vaddr_t heap=curthread->t_addrspace->heap_top;
+	KASSERT((amount+heap)>=curthread->t_addrspace->heap_base);
+		KASSERT((amount+heap)<curthread->t_addrspace->stack_base);
+	if(amount+heap<heap){page_free((amount+heap)&PAGE_FRAME);curthread->t_addrspace->heap_top=amount+heap; return 0;}
+	amount=ROUNDUP(amount,4);
+	KASSERT((amount+heap)>=curthread->t_addrspace->heap_base);
+	KASSERT((amount+heap)<curthread->t_addrspace->stack_base);
+	curthread->t_addrspace->heap_top=heap+amount;
+	*retval=heap;
+	return 0;
+
+}
 
 
