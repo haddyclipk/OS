@@ -147,7 +147,7 @@ void free_kpages(vaddr_t addr){
 	int i;
 	spinlock_acquire(&coremap_lk);
 	for (i=free_start;i<pnum;i++){
-		if(coremap[i].va==addr&&coremap[i].pid==curthread->t_pid)break;
+		if(coremap[i].va==addr)break;
 	}
 	if(i==pnum) {spinlock_release(&coremap_lk);return;}
 	//coremap[i].as->ptable

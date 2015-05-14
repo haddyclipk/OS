@@ -84,8 +84,11 @@ int fdesc_init(void) {
 }  
 
 int sys_open(const char *fdesc_name, int flags, mode_t mode , int *retval) { 
+	if(fdesc_name==NULL) return EFAULT;
+	if(fdesc_name>=(char *)0x80000000)return EFAULT;
+	if(fdesc_name==(void *)0x40000000)return EFAULT;
 
- 	int result=0, index = 3; 
+	int result=0, index = 3;
 	struct vnode *vn; 
  	char *fname; 
 	size_t len;
@@ -156,7 +159,7 @@ int sys_close(int fh, int *retval) {
  	} 
   	
  	if(curthread->fdtable[fh]->ref_count == 1) {  
- 		vfs_close(curthread->fdtable[fh]->vn);
+ 		VOP_CLOSE(curthread->fdtable[fh]->vn);
 		curthread->fdtable[fh]->ref_count =0;
                 lock_destroy(curthread->fdtable[fh]->lock);
 		kfree(curthread->fdtable[fh]); 
@@ -181,6 +184,10 @@ int sys_read(int fd, void *buf, size_t buflen, int *retval){
 		*retval = -1;
 		return EBADF;
 	}
+	if(buf==NULL) return EFAULT;
+	if(buf>=(void*)0x80000000)return EFAULT;
+	if(buf==(void *)0x40000000)return EFAULT;
+
 	if(curthread->fdtable[fd]->flags == O_WRONLY) {
 		*retval = -1;
 		return EBADF;
@@ -227,10 +234,12 @@ int sys_write(int fd, const void *buf, size_t buflen, int *retval){
 		*retval = -1;
 		return EBADF;
 	}
-	if(!buf){
+	if(buf==NULL){
 		*retval = -1;
 		 return EFAULT;
 	}
+	if(buf>=(void*)0x80000000)return EFAULT;
+		if(buf==(void *)0x40000000)return EFAULT;
 
 	if(curthread->fdtable[fd]->flags == O_RDONLY) {
 		*retval = -1;

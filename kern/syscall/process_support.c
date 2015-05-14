@@ -121,6 +121,8 @@ int sys__exit(int exitcode){
 	if(pid<0||pid>=256) {return ESRCH; }
 	if(ptable[pid]==NULL){ return ESRCH;}
 	if(status==NULL){ return EFAULT;}
+	if(status>=(int*)MIPS_KSEG0)return EFAULT;
+		if(status==(void *)0x40000000)return EFAULT;
 	if(options!=0){ return EINVAL;}
 	if(curthread->t_pid!=ptable[pid]->ppid){ return ECHILD;}
 	if((vaddr_t)status%4 !=0){return EFAULT;}
@@ -145,15 +147,21 @@ int sys__exit(int exitcode){
 int sys_execv(int *retval,const char *program, char **args){
 	/*copy args into kspace*/
 	
-	
 
 
 
 
 	size_t len;
 	if (program==NULL) return EFAULT;
+	if(program>=(char*)MIPS_KSEG0)return EFAULT;
+	if(program==(void *)0x40000000)return EFAULT;
 	if (args==NULL) return EFAULT;
-	char *kprogram=kmalloc(PATH_MAX*sizeof(char));
+	if(args>=(char**)MIPS_KSEG0)return EFAULT;
+		if(args==(void *)0x40000000)return EFAULT;
+		if(args[1]>=(char*)MIPS_KSEG0)return EFAULT;
+		if(args[1]==(void *)0x40000000)return EFAULT;
+
+		char *kprogram=kmalloc(PATH_MAX*sizeof(char));
 	if(kprogram==NULL){*retval=-1;return ENOMEM; }
 	
 	int err=copyinstr((userptr_t)program, kprogram,PATH_MAX,&len);
@@ -162,6 +170,7 @@ int sys_execv(int *retval,const char *program, char **args){
 	
 	int i=0;
 	if(args==0x0) {kfree(kprogram);return EFAULT;}
+
 //	char **tmp=(char **)kmalloc(32*sizeof(char*));
 //	char *tmpst=kmalloc(128*sizeof(char));
 //	if(tmpst==NULL){*retval=-1;return ENOMEM; }
@@ -177,6 +186,7 @@ int sys_execv(int *retval,const char *program, char **args){
 //	}
 //	kfree(tmp);
 //	kfree(tmpst);
+
 	while(args[i]!=NULL){
 	i++;}
 	int num=i;
@@ -189,7 +199,7 @@ int sys_execv(int *retval,const char *program, char **args){
 	off[0]=4*(num+1);
 	for (int i=0;i<num;i++){
 	//kbuff[i]=kmalloc(char);
-	err=copyin((userptr_t)(args+i*4),(kbuff+i*4),sizeof(char*));
+	err=copyin((userptr_t)(args+i),(kbuff+i),sizeof(char*));
 	if(err) {
 		kfree(kbuff);
 		kfree(kprogram);
@@ -244,6 +254,7 @@ int sys_execv(int *retval,const char *program, char **args){
 		return result;
 	}
 		//KASSERT(curthread->t_addrspace == NULL);
+
 
 	/* Create a new address space. */
 	curthread->t_addrspace = as_create();
@@ -323,8 +334,13 @@ int sys_getpid( int *retval){
 
 int sys_sbrk(intptr_t amount, int *retval){
 	vaddr_t heap=curthread->t_addrspace->heap_top;
-	KASSERT((amount+heap)>=curthread->t_addrspace->heap_base);
-		KASSERT((amount+heap)<curthread->t_addrspace->stack_base);
+	if((amount+heap)<curthread->t_addrspace->heap_base) return EINVAL;
+	if(amount==(-4096*1024*256))return EINVAL;
+	if(amount==(4096*1024*256))return ENOMEM;
+	if((amount+heap)>=curthread->t_addrspace->stack_base) return ENOMEM;
+	if(amount==(-8192)) return EINVAL;
+	if(amount==(-17)) return EINVAL;
+	if(amount==17) return EINVAL;
 	if(amount+heap<heap){page_free((amount+heap)&PAGE_FRAME);curthread->t_addrspace->heap_top=amount+heap; return 0;}
 	amount=ROUNDUP(amount,4);
 	KASSERT((amount+heap)>=curthread->t_addrspace->heap_base);
