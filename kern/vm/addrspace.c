@@ -174,7 +174,7 @@ as_destroy(struct addrspace *as)
 
 	while(as->ptable != NULL){  ////clean pagetable
 		pt = as->ptable;
-		page_free(as->ptable->va);
+		page_free(as->ptable->va,as);
 		as->ptable->va=0;
 		as->ptable = as->ptable->next;
 		//bzero(pt, sizeof(struct PTE));
@@ -212,30 +212,27 @@ as_activate(struct addrspace *as)
  * moment, these are ignored. When you write the VM system, you may
  * want to implement them.
  */
-static void addpte(struct PTE *tmp1, int i, vaddr_t vaddr,  struct addrspace *as,int readable, int writeable, int executable){
-	tmp1->va=vaddr+i*PAGE_SIZE;
-//update permission
-	if(readable==4)tmp1->read=1;
-	if(writeable==2)tmp1->write=1;
-	if(executable==1)tmp1->exe=1;
-//spinlock_acquire(&coremap_lk);
-
-tmp1->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace,tmp1->va));
-//int j=(tmp1->pa)/PAGE_SIZE;
-tmp1->PTE_P=1;
-tmp1->next=NULL;
-as->pagenum++;
+//static void addpte(struct PTE *tmp1, int i, vaddr_t vaddr,  struct addrspace *as,int readable, int writeable, int executable){
+//	tmp1->va=vaddr+i*PAGE_SIZE;
+////update permission
+//	if(readable==4)tmp1->read=1;
+//	if(writeable==2)tmp1->write=1;
+//	if(executable==1)tmp1->exe=1;
+////spinlock_acquire(&coremap_lk);
+//
+//tmp1->pa=-1;//KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace,tmp1->va));
+////int j=(tmp1->pa)/PAGE_SIZE;
+//tmp1->PTE_P=1;
+//tmp1->next=NULL;
+//as->pagenum++;
 //coremap update
 //coremap[j].pid=curthread->t_pid;
 //coremap[j].va=tmp1->va;
 //coremap[j].as=as;
 //coremap[j].pgstate=DIRTY;
 //spinlock_release(&coremap_lk);
-}
-static void ap()
-{
-	return ;
-}
+
+
 int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		 int readable, int writeable, int executable)
@@ -268,43 +265,43 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		tmp->next=reg;
 		count=reg->psize;
 	}
-
+	as->heap_base=vaddr+(sz/PAGE_SIZE)*PAGE_SIZE;
+		as->heap_top=as->heap_base;
 
 
 
 
 
 	// update pagetable
-	struct PTE *PT= as->ptable;
-	struct PTE *pt1=kmalloc(sizeof(struct PTE) );
-	KASSERT(pt1!=NULL);
-	addpte(pt1,0,vaddr,as,readable,writeable, executable);
-	struct PTE *tmp1=pt1;
-ap();
-	for(int i=1;i<count;i++){
-		ap();
-
-		tmp1->next=kmalloc(sizeof(struct PTE));
-		tmp1=tmp1->next;
-		KASSERT(tmp1!=NULL);
-
-		addpte(tmp1,i,vaddr,as,readable,writeable, executable);
-		ap();
-	//coremap update
-
-	}
-
-	if (as->ptable==NULL){as->ptable=pt1;}
-	else{while(PT->next!=NULL){
-			PT=PT->next;
-			ap();
-		}
-	PT->next=pt1;
-	ap();
-	}
+//	struct PTE *PT= as->ptable;
+//	struct PTE *pt1=kmalloc(sizeof(struct PTE) );
+//	KASSERT(pt1!=NULL);
+//	addpte(pt1,0,vaddr,as,readable,writeable, executable);
+//	struct PTE *tmp1=pt1;
+////ap();
+//	for(int i=1;i<count;i++){
+//		ap();
+//
+//		tmp1->next=kmalloc(sizeof(struct PTE));
+//		tmp1=tmp1->next;
+//		KASSERT(tmp1!=NULL);
+////
+//		addpte(tmp1,i,vaddr,as,readable,writeable, executable);
+////		ap();
+//	//coremap update
+//
+//	}
+//
+//	if (as->ptable==NULL){as->ptable=pt1;}
+//	else{while(PT->next!=NULL){
+//			PT=PT->next;
+//			ap();
+//		}
+//	PT->next=pt1;
+//	ap();
+//	}
 	//HEAP
-	as->heap_base=vaddr+(sz/PAGE_SIZE)*PAGE_SIZE;
-	as->heap_top=as->heap_base;
+
 
 
 //	(void)as;
@@ -322,9 +319,38 @@ as_prepare_load(struct addrspace *as)
 	/*
 	 * Write this.
 	 */
+
 	struct region *tmp=as->region;
 	while (tmp!=NULL){
 		if (tmp->write==0) {tmp->write=1;tmp->flag=1;}
+//		struct PTE *PT= as->ptable;
+//			struct PTE *pt1=kmalloc(sizeof(struct PTE) );
+//			KASSERT(pt1!=NULL);
+//			addpte(pt1,0,tmp->vbase,as,tmp->read,tmp->write, tmp->exe);
+//			struct PTE *tmp1=pt1;
+//		//ap();
+//			for(int i=1;i<count;i++){
+//				ap();
+//
+//				tmp1->next=kmalloc(sizeof(struct PTE));
+//				tmp1=tmp1->next;
+//				KASSERT(tmp1!=NULL);
+//		//
+//				addpte(tmp1,i,tmp->vbase,as,tmp->read,tmp->write, tmp->exe);
+//		//		ap();
+//			//coremap update
+//
+//			}
+//
+//			if (as->ptable==NULL){as->ptable=pt1;}
+//			else{while(PT->next!=NULL){
+//					PT=PT->next;
+//					ap();
+//				}
+//			PT->next=pt1;
+//			ap();
+//			}
+
 		tmp=tmp->next;
 	}
 	//(void)as;

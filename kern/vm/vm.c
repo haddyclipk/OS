@@ -18,6 +18,7 @@
 
 struct spinlock coremap_lk=SPINLOCK_INITIALIZER;
 struct spinlock tlb_lk=SPINLOCK_INITIALIZER;
+struct spinlock s_lock=SPINLOCK_INITIALIZER;
 
 static int bootstrap=0;
 static int free_start=0;
@@ -116,6 +117,8 @@ vaddr_t page_alloc(struct addrspace* newas,vaddr_t va){
 	for(i=free_start;i<pnum;i++){
 		if(coremap[i].pgstate==FREE)break;
 	}
+	KASSERT(i!=pnum);
+	//if(i==128) panic("run out of coremap");
 	if(coremap[i].pgstate!=FREE){
 		pp();
 		return EFAULT;
@@ -149,6 +152,7 @@ void free_kpages(vaddr_t addr){
 	for (i=free_start;i<pnum;i++){
 		if(coremap[i].va==addr)break;
 	}
+
 	if(i==pnum) {spinlock_release(&coremap_lk);return;}
 	//coremap[i].as->ptable
 	//if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
@@ -168,7 +172,7 @@ void free_kpages(vaddr_t addr){
 	spinlock_release(&coremap_lk);
 }
 
-void page_free(vaddr_t addr){
+void page_free(vaddr_t addr, struct addrspace* as){
 	addr&=PAGE_FRAME;
 //		struct PTE *pt=curthread->t_addrspace->ptable;
 //		int count=curthread->t_addrspace->pagenum;
@@ -179,10 +183,10 @@ void page_free(vaddr_t addr){
 //		KASSERT(k!=0);
 		spinlock_acquire(&coremap_lk);
 	for (i=0;i<pnum;i++){
-		if(coremap[i].va==addr&&coremap[i].pid==curthread->t_pid)break;
+		if(coremap[i].va==addr&&coremap[i].as==as)break;
 	}
-	//KASSERT(i!=pnum);
-	if(i==pnum) {spinlock_release(&coremap_lk);return;}
+	KASSERT(i!=pnum);
+	//if(i==pnum) {spinlock_release(&coremap_lk);return;}
 	//KASSERT(coremap[i].pgstate!=FIXED);
 	if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
 
@@ -193,7 +197,7 @@ void page_free(vaddr_t addr){
 		coremap[i].pgstate=FREE;
 		coremap[i].chunk=1;
 		coremap[i].as=NULL;
-		coremap[i].pid=0;
+		coremap[i].pid=-2;
 
 	spinlock_release(&coremap_lk);
 }
@@ -233,7 +237,9 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		struct PTE *tmp;
 		struct PTE *p2=NULL;
 		int flag=0;
-
+		char read=1;
+		char write=1;
+		char exe=1;
 		int tlb_index;
 		//paddr_t pad = 0;
 		if(curthread->t_addrspace == NULL) return EFAULT;
@@ -241,11 +247,11 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 
 		KASSERT(faultaddress < MIPS_KSEG0);
-		KASSERT(as->ptable != NULL);
+	//	KASSERT(as->ptable != NULL);
 		KASSERT(as->region != NULL);
 		KASSERT(as->heap_base != 0);
 		KASSERT(as->heap_top != 0);
-	KASSERT((as->ptable->va & PAGE_FRAME) == as->ptable->va);
+	//KASSERT((as->ptable->va & PAGE_FRAME) == as->ptable->va);
 		//cp();
 		//KASSERT((as->ptable->pa & PAGE_FRAME) == as->ptable->pa);
 
@@ -253,18 +259,18 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		vaddr_t vadr = faultaddress;
 		faultaddress &= PAGE_FRAME;
 
-		struct spinlock s_lock;
+		//struct spinlock s_lock;
 		struct PTE *p = as->ptable;
 		paddr_t padr = 0;
 		//vaddr_t vadr = faultaddress;
-		spinlock_init(&s_lock);
+		//spinlock_init(&s_lock);
 		while (reg!=NULL){
-					bp();
-					if ((faultaddress>=reg->vbase) && (faultaddress<(reg->vbase+PAGE_SIZE*reg->psize))) flag=1;
+					//bp();
+					if ((faultaddress>=reg->vbase) && (faultaddress<(reg->vbase+PAGE_SIZE*reg->psize))) {flag=1;read=reg->read;write=reg->write;exe=reg->exe;}
 					reg=reg->next;
-					bp();
+					//bp();
 				}
-				bp();
+				//bp();
 				if ((vadr>=as->heap_base) && vadr<(as->heap_top)) flag=1;
 				if (vadr>=(as->stack_base) && vadr<(as->stack_top)) flag=1;
 				if (flag==0) {panic("0ddddddd");}
@@ -273,73 +279,67 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		if (faulttype!=0 && faulttype!=1 && faulttype!=2){panic("unknown fault");}
 		//vm_read
 		if (faulttype==0||faulttype==1){
-			spinlock_acquire(&s_lock);
-			int m=tlb_probe(faultaddress, padr);
-			if (m>=0&&m<=NUM_TLB){spinlock_release(&s_lock);panic("TLB wrong");}
-			while(p != NULL){
-				if(p->next==NULL){tmp=p;}
-				if(p->va == faultaddress ){
-					if( p->PTE_P == 1){
-						//if(p->write==1)
-					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
-						//else padr = p->pa | TLBLO_VALID;
-					}
-				}
-//
-				p = p->next;
-			}
-			if(padr==0) {tmp->next=kmalloc(sizeof(struct PTE));
-			p=tmp->next;
-			p->exe=1;
-			p->read=1;
-			p->write=1;
-			p->va=faultaddress;
-			p->PTE_P=1;
 
-			p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
+//			int m=tlb_probe(faultaddress, padr);
+//			if (m>=0&&m<=NUM_TLB){spinlock_release(&s_lock);panic("TLB wrong");}
+			if(as->ptable==NULL){
+			as->ptable=kmalloc(sizeof(struct PTE));
+			//p=tmp->next;
+			as->ptable->exe=exe;
+			as->ptable->read=read;
+			as->ptable->write=write;
+			as->ptable->va=faultaddress;
+			as->ptable->PTE_P=1;
+
+			as->ptable->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
 			as->pagenum++;
 
 			//int j=(p->pa)/PAGE_SIZE;
 
 
 
-			p->next=NULL;
-			padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
+			as->ptable->next=NULL;
+			padr = as->ptable->pa | TLBLO_DIRTY | TLBLO_VALID;
 			}
-			bp();
+
+			else {while(p != NULL){
+				if(p->next==NULL){tmp=p;}
+				if(p->va == faultaddress ){
+					if( p->PTE_P == 1){
+						//if(p->write==1)
+						//
+					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
+						//else padr = p->pa | TLBLO_VALID;
+					}
+					//else {p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;}
+				}
+//
+				p = p->next;
+			}
+
+			if(padr==0) {tmp->next=kmalloc(sizeof(struct PTE));
+						p=tmp->next;
+						p->exe=exe;
+						p->read=read;
+						p->write=write;
+						p->va=faultaddress;
+						p->PTE_P=1;
+
+						p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
+						as->pagenum++;
+
+						//int j=(p->pa)/PAGE_SIZE;
+						p->next=NULL;
+						padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
+						}
+			}
+			//bp();
+			spinlock_acquire(&s_lock);
 			//KASSERT((padr & PAGE_FRAME) == padr);
 			tlb_random(faultaddress, padr);
 			spinlock_release(&s_lock);
 		}
-		//vm_write
-//		if(faulttype==1){
-//		spinlock_acquire(&s_lock);
-//			int m=tlb_probe(faultaddress, padr);
-//			if (m>=0&&m<=NUM_TLB){spinlock_release(&s_lock);return 0;}
-//
-//			while(p!= NULL){
-//				if(p->va == faultaddress){
-//					bp();
-//					p2=p;
-//					break;}
-//					p=p->next;
-//					}
-//				bp();
-//
-//				if( p2->PTE_P == 1){
-//
-//				padr = p2->pa | TLBLO_DIRTY | TLBLO_VALID;
-//							}
-//								else{
-//									padr=page_alloc();
-//									padr = padr | TLBLO_DIRTY | TLBLO_VALID;
-//								}
-//
-//
-//bp();
-//						tlb_random(faultaddress, padr);
-//						spinlock_release(&s_lock);
-//		}
+
 		//vm_readonly
 		if(faulttype==2){
 			//p = curthread->t_addrspace->ptable;

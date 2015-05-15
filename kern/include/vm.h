@@ -56,7 +56,7 @@ struct coremap_entry* coremap;
 
 vaddr_t page_alloc(struct addrspace* newas,vaddr_t va);
 vaddr_t page_nalloc(int npages);
-void page_free(vaddr_t va);
+void page_free(vaddr_t va, struct addrspace* as);
 void make_page_avail(struct coremap_entry *coremap);
 #include <machine/vm.h>
 
