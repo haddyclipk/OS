@@ -21,7 +21,7 @@
 #include <kern/process.h>
 #include <kern/filesys.h>
 
-struct process* ptable[256];
+struct process* ptable[130];
 int sys_fork(struct trapframe *tf,int *retval ){
 	
 	struct trapframe* ktf=kmalloc(sizeof(struct trapframe));

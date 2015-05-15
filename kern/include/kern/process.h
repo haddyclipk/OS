@@ -4,7 +4,7 @@
 #include <limits.h>
 #include <thread.h>
 #include <synch.h>
-extern struct process* ptable[256];
+extern struct process* ptable[130];
 
 struct process
 { pid_t ppid;

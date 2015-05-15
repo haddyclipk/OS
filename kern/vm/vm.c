@@ -117,6 +117,7 @@ vaddr_t page_alloc(struct addrspace* newas,vaddr_t va){
 	for(i=free_start;i<pnum;i++){
 		if(coremap[i].pgstate==FREE)break;
 	}
+	//kprintf("i = %d\n", i);
 	KASSERT(i!=pnum);
 	//if(i==128) panic("run out of coremap");
 	if(coremap[i].pgstate!=FREE){
@@ -185,10 +186,11 @@ void page_free(vaddr_t addr, struct addrspace* as){
 	for (i=0;i<pnum;i++){
 		if(coremap[i].va==addr&&coremap[i].as==as)break;
 	}
+
 	KASSERT(i!=pnum);
 	//if(i==pnum) {spinlock_release(&coremap_lk);return;}
 	//KASSERT(coremap[i].pgstate!=FIXED);
-	if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
+	//if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
 
 
 

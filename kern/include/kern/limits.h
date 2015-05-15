@@ -49,13 +49,13 @@
  */
 
 /* Longest filename (without directory) not including null terminator */
-#define __NAME_MAX      255
+#define __NAME_MAX     60 //255
 
 /* Longest full path name */
-#define __PATH_MAX      1024
+#define __PATH_MAX      30//1024
 
 /* Max bytes for an exec function */
-#define __ARG_MAX       (64 * 1024)
+#define __ARG_MAX       100//(64 * 1024)
 
 
 /*
@@ -91,7 +91,7 @@
  */
 
 /* Max open files per process */
-#define __OPEN_MAX      128
+#define __OPEN_MAX      50//128
 
 /* Max number of iovec structures at once for readv/writev/preadv/pwritev */
 #define __IOV_MAX       1024

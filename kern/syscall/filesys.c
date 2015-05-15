@@ -306,6 +306,10 @@ int sys_dup2(int oldfd, int newfd, int *retval){
 			return EBADF;
 		}
 	}
+	if(newfd>=0&&newfd<3){
+		*retval=newfd;
+		return 0;
+	}
 
 	curthread->fdtable[newfd] = curthread->fdtable[oldfd];
 
@@ -385,10 +389,14 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *retval){
 
 int sys_chdir(const char *pathname, int *retval){
 	char *path;
-	size_t len;
+	//size_t len;
+	if (pathname==NULL) return EFAULT;
+	if (pathname>=(char*)0x80000000) return EFAULT;
+	if (pathname==(void*)0x40000000) return EFAULT;
+
 	path = (char *)kmalloc(sizeof(char)*PATH_MAX);
 	int result = 0;
-	result = copyinstr((const_userptr_t)pathname, path, PATH_MAX, &len);
+	result = copyin((const_userptr_t)pathname, path, sizeof(pathname));
 	if(result){
 		kfree(path);
 		*retval = -1;		
@@ -409,6 +417,8 @@ int sys___getcwd(char *buf, size_t buflen, int *retval){
 	struct uio u;
 	struct iovec i;
 	if(buf==NULL) return EFAULT;
+	if(buf>=(char*)0x80000000) return EFAULT;
+	if(buf==(char*)0x40000000) return EFAULT;
 	
 	//char *nbuf=(char *)kmalloc(sizeof(char)*buflen);	
 	int result = 0;
