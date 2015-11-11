@@ -391,8 +391,6 @@ int sys_chdir(const char *pathname, int *retval){
 	char *path;
 	//size_t len;
 	if (pathname==NULL) return EFAULT;
-	if (pathname>=(char*)0x80000000) return EFAULT;
-	if (pathname==(void*)0x40000000) return EFAULT;
 
 	path = (char *)kmalloc(sizeof(char)*PATH_MAX);
 	int result = 0;
@@ -417,8 +415,7 @@ int sys___getcwd(char *buf, size_t buflen, int *retval){
 	struct uio u;
 	struct iovec i;
 	if(buf==NULL) return EFAULT;
-	if(buf>=(char*)0x80000000) return EFAULT;
-	if(buf==(char*)0x40000000) return EFAULT;
+
 	
 	//char *nbuf=(char *)kmalloc(sizeof(char)*buflen);	
 	int result = 0;

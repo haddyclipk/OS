@@ -1484,39 +1484,9 @@ index 0000000..e6cdaf1
 +
 + #endif /* FILESYS_H_ */
 +
-diff --git a/kern/include/kern/limits.h b/kern/include/kern/limits.h
-index 3fad3f2..3863055 100644
---- a/kern/include/kern/limits.h
-+++ b/kern/include/kern/limits.h
-@@ -49,13 +49,13 @@
-  */
- 
- /* Longest filename (without directory) not including null terminator */
--#define __NAME_MAX      255
-+#define __NAME_MAX     60 //255
- 
- /* Longest full path name */
--#define __PATH_MAX      1024
-+#define __PATH_MAX      30//1024
- 
- /* Max bytes for an exec function */
--#define __ARG_MAX       (64 * 1024)
-+#define __ARG_MAX       100//(64 * 1024)
- 
- 
- /*
-@@ -91,7 +91,7 @@
-  */
- 
- /* Max open files per process */
--#define __OPEN_MAX      128
-+#define __OPEN_MAX      50//128
- 
- /* Max number of iovec structures at once for readv/writev/preadv/pwritev */
- #define __IOV_MAX       1024
 diff --git a/kern/include/kern/process.h b/kern/include/kern/process.h
 new file mode 100644
-index 0000000..83094b1
+index 0000000..6b14c98
 --- /dev/null
 +++ b/kern/include/kern/process.h
 @@ -0,0 +1,22 @@
@@ -1526,7 +1496,7 @@ index 0000000..83094b1
 +#include <limits.h>
 +#include <thread.h>
 +#include <synch.h>
-+extern struct process* ptable[130];
++extern struct process* ptable[256];
 +
 +struct process
 +{ pid_t ppid;
@@ -1678,7 +1648,7 @@ index 86706ca..5cd9383 100644
  	struct addrspace *t_addrspace;	/* virtual address space */
  
 diff --git a/kern/include/vm.h b/kern/include/vm.h
-index e4e73d0..99e8de4 100644
+index e4e73d0..2dda8c4 100644
 --- a/kern/include/vm.h
 +++ b/kern/include/vm.h
 @@ -29,14 +29,35 @@
@@ -1713,7 +1683,7 @@ index e4e73d0..99e8de4 100644
  
 +vaddr_t page_alloc(struct addrspace* newas,vaddr_t va);
 +vaddr_t page_nalloc(int npages);
-+void page_free(vaddr_t va, struct addrspace* as);
++void page_free(vaddr_t va);
 +void make_page_avail(struct coremap_entry *coremap);
  #include <machine/vm.h>
  
@@ -2234,10 +2204,10 @@ index 0000000..3dfd450
 Binary files /dev/null and b/kern/syscall/.filesys.c.swp differ
 diff --git a/kern/syscall/filesys.c b/kern/syscall/filesys.c
 new file mode 100644
-index 0000000..6b60676
+index 0000000..5dec5a0
 --- /dev/null
 +++ b/kern/syscall/filesys.c
-@@ -0,0 +1,450 @@
+@@ -0,0 +1,440 @@
 +#include <syscall.h> 
 +#include <lib.h> 
 +#include <vfs.h> 
@@ -2546,10 +2516,6 @@ index 0000000..6b60676
 +			return EBADF;
 +		}
 +	}
-+	if(newfd>=0&&newfd<3){
-+		*retval=newfd;
-+		return 0;
-+	}
 +
 +	curthread->fdtable[newfd] = curthread->fdtable[oldfd];
 +
@@ -2629,14 +2595,10 @@ index 0000000..6b60676
 +
 +int sys_chdir(const char *pathname, int *retval){
 +	char *path;
-+	//size_t len;
-+	if (pathname==NULL) return EFAULT;
-+	if (pathname>=(char*)0x80000000) return EFAULT;
-+	if (pathname==(void*)0x40000000) return EFAULT;
-+
++	size_t len;
 +	path = (char *)kmalloc(sizeof(char)*PATH_MAX);
 +	int result = 0;
-+	result = copyin((const_userptr_t)pathname, path, sizeof(pathname));
++	result = copyinstr((const_userptr_t)pathname, path, PATH_MAX, &len);
 +	if(result){
 +		kfree(path);
 +		*retval = -1;		
@@ -2657,8 +2619,6 @@ index 0000000..6b60676
 +	struct uio u;
 +	struct iovec i;
 +	if(buf==NULL) return EFAULT;
-+//	if(buf>=(char*)0x80000000) return EFAULT;
-+//	if(buf==(char*)0x40000000) return EFAULT;
 +	
 +	//char *nbuf=(char *)kmalloc(sizeof(char)*buflen);	
 +	int result = 0;
@@ -2690,7 +2650,7 @@ index 0000000..6b60676
 +}
 diff --git a/kern/syscall/process.c b/kern/syscall/process.c
 new file mode 100644
-index 0000000..6586990
+index 0000000..569f6a6
 --- /dev/null
 +++ b/kern/syscall/process.c
 @@ -0,0 +1,73 @@
@@ -2712,13 +2672,13 @@ index 0000000..6586990
 +#include <vnode.h>
 +#include <kern/process.h>
 +#include <kern/filesys.h>
-+//struct spinlock pt_lk=SPINLOCK_INITIALIZER;
++struct spinlock pt_lk=SPINLOCK_INITIALIZER;
 + //void thread_destroy(struct thread *thread);
-+struct process *ptable[130];
++struct process *ptable[256];
 +
 +pid_t pid_alloc(void){
-+	//spinlock_acquire(&pt_lk);
-+	for (int i=2; i<130; i++){
++	spinlock_acquire(&pt_lk);
++	for (int i=2; i<256; i++){
 +		if (ptable[i]==NULL){
 +		return (pid_t)i;
 +		}
@@ -2746,7 +2706,7 @@ index 0000000..6586990
 +		//	return ENOMEM;
 +		//}
 +		ptable[pid]=proc;
-+		//spinlock_release(&pt_lk);
++		spinlock_release(&pt_lk);
 +		return 0;
 +}
 +
@@ -2769,7 +2729,7 @@ index 0000000..6586990
 +}
 diff --git a/kern/syscall/process_support.c b/kern/syscall/process_support.c
 new file mode 100644
-index 0000000..40b72a6
+index 0000000..f24c817
 --- /dev/null
 +++ b/kern/syscall/process_support.c
 @@ -0,0 +1,354 @@
@@ -2796,7 +2756,7 @@ index 0000000..40b72a6
 +#include <kern/process.h>
 +#include <kern/filesys.h>
 +
-+struct process* ptable[130];
++struct process* ptable[256];
 +int sys_fork(struct trapframe *tf,int *retval ){
 +	
 +	struct trapframe* ktf=kmalloc(sizeof(struct trapframe));
@@ -2849,9 +2809,9 @@ index 0000000..40b72a6
 +	curthread->t_addrspace =space;
 +	//curthread->t_addrspace = as_create();
 +	
-+	//int i=0;
-+	//for(i=2;i<256;i++){if (ptable[i]->self->t_addrspace==curthread->t_addrspace ) break; }
-+	//for(int k=63;k<pnum;k++){if(coremap[k].as==curthread->t_addrspace)coremap[k].pid=i;}
++	int i=0;
++	for(i=2;i<256;i++){if (ptable[i]->self->t_addrspace==curthread->t_addrspace ) break; }
++	for(int k=63;k<128;k++){if(coremap[k].as==curthread->t_addrspace)coremap[k].pid=i;}
 +	//memcpy(curthread->t_addrspace, sp, sizeof(struct addrspace));
 +	as_activate(curthread->t_addrspace);
 +	//tf->tf_a1=1;
@@ -3116,7 +3076,7 @@ index 0000000..40b72a6
 +	if(amount==(-8192)) return EINVAL;
 +	if(amount==(-17)) return EINVAL;
 +	if(amount==17) return EINVAL;
-+	if(amount+heap<heap){page_free((amount+heap)&PAGE_FRAME, curthread->t_addrspace);curthread->t_addrspace->heap_top=amount+heap; return 0;}
++	if(amount+heap<heap){page_free((amount+heap)&PAGE_FRAME);curthread->t_addrspace->heap_top=amount+heap; return 0;}
 +	amount=ROUNDUP(amount,4);
 +	KASSERT((amount+heap)>=curthread->t_addrspace->heap_base);
 +	KASSERT((amount+heap)<curthread->t_addrspace->stack_base);
@@ -3616,7 +3576,7 @@ index e7235e3..39ce62b 100644
          splhigh();
  	thread_switch(S_ZOMBIE, NULL);
 diff --git a/kern/vm/addrspace.c b/kern/vm/addrspace.c
-index 302fa7b..e25ec4d 100644
+index 302fa7b..597861f 100644
 --- a/kern/vm/addrspace.c
 +++ b/kern/vm/addrspace.c
 @@ -32,13 +32,13 @@
@@ -3766,7 +3726,7 @@ index 302fa7b..e25ec4d 100644
 +
 +	while(as->ptable != NULL){  ////clean pagetable
 +		pt = as->ptable;
-+		page_free(as->ptable->va,as);
++		page_free(as->ptable->va);
 +		as->ptable->va=0;
 +		as->ptable = as->ptable->next;
 +		//bzero(pt, sizeof(struct PTE));
@@ -3793,35 +3753,38 @@ index 302fa7b..e25ec4d 100644
  	(void)as;  // suppress warning until code gets written
  }
  
-@@ -106,6 +212,27 @@ as_activate(struct addrspace *as)
+@@ -106,6 +212,30 @@ as_activate(struct addrspace *as)
   * moment, these are ignored. When you write the VM system, you may
   * want to implement them.
   */
-+//static void addpte(struct PTE *tmp1, int i, vaddr_t vaddr,  struct addrspace *as,int readable, int writeable, int executable){
-+//	tmp1->va=vaddr+i*PAGE_SIZE;
-+////update permission
-+//	if(readable==4)tmp1->read=1;
-+//	if(writeable==2)tmp1->write=1;
-+//	if(executable==1)tmp1->exe=1;
-+////spinlock_acquire(&coremap_lk);
-+//
-+//tmp1->pa=-1;//KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace,tmp1->va));
-+////int j=(tmp1->pa)/PAGE_SIZE;
-+//tmp1->PTE_P=1;
-+//tmp1->next=NULL;
-+//as->pagenum++;
++static void addpte(struct PTE *tmp1, int i, vaddr_t vaddr,  struct addrspace *as,int readable, int writeable, int executable){
++	tmp1->va=vaddr+i*PAGE_SIZE;
++//update permission
++	if(readable==4)tmp1->read=1;
++	if(writeable==2)tmp1->write=1;
++	if(executable==1)tmp1->exe=1;
++//spinlock_acquire(&coremap_lk);
++
++tmp1->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace,tmp1->va));
++//int j=(tmp1->pa)/PAGE_SIZE;
++tmp1->PTE_P=1;
++tmp1->next=NULL;
++as->pagenum++;
 +//coremap update
 +//coremap[j].pid=curthread->t_pid;
 +//coremap[j].va=tmp1->va;
 +//coremap[j].as=as;
 +//coremap[j].pgstate=DIRTY;
 +//spinlock_release(&coremap_lk);
-+
-+
++}
++static void ap()
++{
++	return ;
++}
  int
  as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
  		 int readable, int writeable, int executable)
-@@ -113,14 +240,77 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
+@@ -113,14 +243,77 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
  	/*
  	 * Write this.
  	 */
@@ -3857,43 +3820,43 @@ index 302fa7b..e25ec4d 100644
 +		tmp->next=reg;
 +		count=reg->psize;
 +	}
-+	as->heap_base=vaddr+(sz/PAGE_SIZE)*PAGE_SIZE;
-+		as->heap_top=as->heap_base;
++
 +
 +
 +
 +
 +
 +	// update pagetable
-+//	struct PTE *PT= as->ptable;
-+//	struct PTE *pt1=kmalloc(sizeof(struct PTE) );
-+//	KASSERT(pt1!=NULL);
-+//	addpte(pt1,0,vaddr,as,readable,writeable, executable);
-+//	struct PTE *tmp1=pt1;
-+////ap();
-+//	for(int i=1;i<count;i++){
-+//		ap();
-+//
-+//		tmp1->next=kmalloc(sizeof(struct PTE));
-+//		tmp1=tmp1->next;
-+//		KASSERT(tmp1!=NULL);
-+////
-+//		addpte(tmp1,i,vaddr,as,readable,writeable, executable);
-+////		ap();
-+//	//coremap update
-+//
-+//	}
-+//
-+//	if (as->ptable==NULL){as->ptable=pt1;}
-+//	else{while(PT->next!=NULL){
-+//			PT=PT->next;
-+//			ap();
-+//		}
-+//	PT->next=pt1;
-+//	ap();
-+//	}
-+	//HEAP
++	struct PTE *PT= as->ptable;
++	struct PTE *pt1=kmalloc(sizeof(struct PTE) );
++	KASSERT(pt1!=NULL);
++	addpte(pt1,0,vaddr,as,readable,writeable, executable);
++	struct PTE *tmp1=pt1;
++ap();
++	for(int i=1;i<count;i++){
++		ap();
 +
++		tmp1->next=kmalloc(sizeof(struct PTE));
++		tmp1=tmp1->next;
++		KASSERT(tmp1!=NULL);
++
++		addpte(tmp1,i,vaddr,as,readable,writeable, executable);
++		ap();
++	//coremap update
++
++	}
++
++	if (as->ptable==NULL){as->ptable=pt1;}
++	else{while(PT->next!=NULL){
++			PT=PT->next;
++			ap();
++		}
++	PT->next=pt1;
++	ap();
++	}
++	//HEAP
++	as->heap_base=vaddr+(sz/PAGE_SIZE)*PAGE_SIZE;
++	as->heap_top=as->heap_base;
 +
 +
 +//	(void)as;
@@ -3906,49 +3869,22 @@ index 302fa7b..e25ec4d 100644
  }
  
  int
-@@ -130,7 +320,40 @@ as_prepare_load(struct addrspace *as)
+@@ -129,8 +322,12 @@ as_prepare_load(struct addrspace *as)
+ 	/*
  	 * Write this.
  	 */
- 
+-
 -	(void)as;
 +	struct region *tmp=as->region;
 +	while (tmp!=NULL){
 +		if (tmp->write==0) {tmp->write=1;tmp->flag=1;}
-+//		struct PTE *PT= as->ptable;
-+//			struct PTE *pt1=kmalloc(sizeof(struct PTE) );
-+//			KASSERT(pt1!=NULL);
-+//			addpte(pt1,0,tmp->vbase,as,tmp->read,tmp->write, tmp->exe);
-+//			struct PTE *tmp1=pt1;
-+//		//ap();
-+//			for(int i=1;i<count;i++){
-+//				ap();
-+//
-+//				tmp1->next=kmalloc(sizeof(struct PTE));
-+//				tmp1=tmp1->next;
-+//				KASSERT(tmp1!=NULL);
-+//		//
-+//				addpte(tmp1,i,tmp->vbase,as,tmp->read,tmp->write, tmp->exe);
-+//		//		ap();
-+//			//coremap update
-+//
-+//			}
-+//
-+//			if (as->ptable==NULL){as->ptable=pt1;}
-+//			else{while(PT->next!=NULL){
-+//					PT=PT->next;
-+//					ap();
-+//				}
-+//			PT->next=pt1;
-+//			ap();
-+//			}
-+
 +		tmp=tmp->next;
 +	}
 +	//(void)as;
  	return 0;
  }
  
-@@ -140,6 +363,11 @@ as_complete_load(struct addrspace *as)
+@@ -140,6 +337,11 @@ as_complete_load(struct addrspace *as)
  	/*
  	 * Write this.
  	 */
@@ -3960,7 +3896,7 @@ index 302fa7b..e25ec4d 100644
  
  	(void)as;
  	return 0;
-@@ -152,10 +380,11 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
+@@ -152,10 +354,11 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
  	 * Write this.
  	 */
  
@@ -3991,10 +3927,10 @@ index 09b764b..11b3af2 100644
   */
 diff --git a/kern/vm/vm.c b/kern/vm/vm.c
 new file mode 100644
-index 0000000..05339f9
+index 0000000..374abaf
 --- /dev/null
 +++ b/kern/vm/vm.c
-@@ -0,0 +1,550 @@
+@@ -0,0 +1,548 @@
 +/*
 + * vm.c
 + *
@@ -4015,7 +3951,6 @@ index 0000000..05339f9
 +
 +struct spinlock coremap_lk=SPINLOCK_INITIALIZER;
 +struct spinlock tlb_lk=SPINLOCK_INITIALIZER;
-+struct spinlock s_lock=SPINLOCK_INITIALIZER;
 +
 +static int bootstrap=0;
 +static int free_start=0;
@@ -4114,9 +4049,6 @@ index 0000000..05339f9
 +	for(i=free_start;i<pnum;i++){
 +		if(coremap[i].pgstate==FREE)break;
 +	}
-+	//kprintf("i = %d\n", i);
-+	KASSERT(i!=pnum);
-+	//if(i==128) panic("run out of coremap");
 +	if(coremap[i].pgstate!=FREE){
 +		pp();
 +		return EFAULT;
@@ -4150,7 +4082,6 @@ index 0000000..05339f9
 +	for (i=free_start;i<pnum;i++){
 +		if(coremap[i].va==addr)break;
 +	}
-+
 +	if(i==pnum) {spinlock_release(&coremap_lk);return;}
 +	//coremap[i].as->ptable
 +	//if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
@@ -4170,7 +4101,7 @@ index 0000000..05339f9
 +	spinlock_release(&coremap_lk);
 +}
 +
-+void page_free(vaddr_t addr, struct addrspace* as){
++void page_free(vaddr_t addr){
 +	addr&=PAGE_FRAME;
 +//		struct PTE *pt=curthread->t_addrspace->ptable;
 +//		int count=curthread->t_addrspace->pagenum;
@@ -4181,13 +4112,12 @@ index 0000000..05339f9
 +//		KASSERT(k!=0);
 +		spinlock_acquire(&coremap_lk);
 +	for (i=0;i<pnum;i++){
-+		if(coremap[i].va==addr&&coremap[i].as==as)break;
++		if(coremap[i].va==addr&&coremap[i].pid==curthread->t_pid)break;
 +	}
-+
-+	KASSERT(i!=pnum);
-+	//if(i==pnum) {spinlock_release(&coremap_lk);return;}
++	//KASSERT(i!=pnum);
++	if(i==pnum) {spinlock_release(&coremap_lk);return;}
 +	//KASSERT(coremap[i].pgstate!=FIXED);
-+	//if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
++	if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
 +
 +
 +
@@ -4196,7 +4126,7 @@ index 0000000..05339f9
 +		coremap[i].pgstate=FREE;
 +		coremap[i].chunk=1;
 +		coremap[i].as=NULL;
-+		coremap[i].pid=-2;
++		coremap[i].pid=0;
 +
 +	spinlock_release(&coremap_lk);
 +}
@@ -4236,9 +4166,7 @@ index 0000000..05339f9
 +		struct PTE *tmp;
 +		struct PTE *p2=NULL;
 +		int flag=0;
-+		char read=1;
-+		char write=1;
-+		char exe=1;
++
 +		int tlb_index;
 +		//paddr_t pad = 0;
 +		if(curthread->t_addrspace == NULL) return EFAULT;
@@ -4246,11 +4174,11 @@ index 0000000..05339f9
 +
 +
 +		KASSERT(faultaddress < MIPS_KSEG0);
-+	//	KASSERT(as->ptable != NULL);
++		KASSERT(as->ptable != NULL);
 +		KASSERT(as->region != NULL);
 +		KASSERT(as->heap_base != 0);
 +		KASSERT(as->heap_top != 0);
-+	//KASSERT((as->ptable->va & PAGE_FRAME) == as->ptable->va);
++	KASSERT((as->ptable->va & PAGE_FRAME) == as->ptable->va);
 +		//cp();
 +		//KASSERT((as->ptable->pa & PAGE_FRAME) == as->ptable->pa);
 +
@@ -4258,18 +4186,18 @@ index 0000000..05339f9
 +		vaddr_t vadr = faultaddress;
 +		faultaddress &= PAGE_FRAME;
 +
-+		//struct spinlock s_lock;
++		struct spinlock s_lock;
 +		struct PTE *p = as->ptable;
 +		paddr_t padr = 0;
 +		//vaddr_t vadr = faultaddress;
-+		//spinlock_init(&s_lock);
++		spinlock_init(&s_lock);
 +		while (reg!=NULL){
-+					//bp();
-+					if ((faultaddress>=reg->vbase) && (faultaddress<(reg->vbase+PAGE_SIZE*reg->psize))) {flag=1;read=reg->read;write=reg->write;exe=reg->exe;}
++					bp();
++					if ((faultaddress>=reg->vbase) && (faultaddress<(reg->vbase+PAGE_SIZE*reg->psize))) flag=1;
 +					reg=reg->next;
-+					//bp();
++					bp();
 +				}
-+				//bp();
++				bp();
 +				if ((vadr>=as->heap_base) && vadr<(as->heap_top)) flag=1;
 +				if (vadr>=(as->stack_base) && vadr<(as->stack_top)) flag=1;
 +				if (flag==0) {panic("0ddddddd");}
@@ -4278,67 +4206,73 @@ index 0000000..05339f9
 +		if (faulttype!=0 && faulttype!=1 && faulttype!=2){panic("unknown fault");}
 +		//vm_read
 +		if (faulttype==0||faulttype==1){
++			spinlock_acquire(&s_lock);
++			int m=tlb_probe(faultaddress, padr);
++			if (m>=0&&m<=NUM_TLB){spinlock_release(&s_lock);panic("TLB wrong");}
++			while(p != NULL){
++				if(p->next==NULL){tmp=p;}
++				if(p->va == faultaddress ){
++					if( p->PTE_P == 1){
++						//if(p->write==1)
++					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
++						//else padr = p->pa | TLBLO_VALID;
++					}
++				}
++//
++				p = p->next;
++			}
++			if(padr==0) {tmp->next=kmalloc(sizeof(struct PTE));
++			p=tmp->next;
++			p->exe=1;
++			p->read=1;
++			p->write=1;
++			p->va=faultaddress;
++			p->PTE_P=1;
 +
-+//			int m=tlb_probe(faultaddress, padr);
-+//			if (m>=0&&m<=NUM_TLB){spinlock_release(&s_lock);panic("TLB wrong");}
-+			if(as->ptable==NULL){
-+			as->ptable=kmalloc(sizeof(struct PTE));
-+			//p=tmp->next;
-+			as->ptable->exe=exe;
-+			as->ptable->read=read;
-+			as->ptable->write=write;
-+			as->ptable->va=faultaddress;
-+			as->ptable->PTE_P=1;
-+
-+			as->ptable->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
++			p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
 +			as->pagenum++;
 +
 +			//int j=(p->pa)/PAGE_SIZE;
 +
 +
 +
-+			as->ptable->next=NULL;
-+			padr = as->ptable->pa | TLBLO_DIRTY | TLBLO_VALID;
++			p->next=NULL;
++			padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
 +			}
-+
-+			else {while(p != NULL){
-+				if(p->next==NULL){tmp=p;}
-+				if(p->va == faultaddress ){
-+					if( p->PTE_P == 1){
-+						//if(p->write==1)
-+						//
-+					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
-+						//else padr = p->pa | TLBLO_VALID;
-+					}
-+					//else {p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;}
-+				}
-+//
-+				p = p->next;
-+			}
-+
-+			if(padr==0) {tmp->next=kmalloc(sizeof(struct PTE));
-+						p=tmp->next;
-+						p->exe=exe;
-+						p->read=read;
-+						p->write=write;
-+						p->va=faultaddress;
-+						p->PTE_P=1;
-+
-+						p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
-+						as->pagenum++;
-+
-+						//int j=(p->pa)/PAGE_SIZE;
-+						p->next=NULL;
-+						padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
-+						}
-+			}
-+			//bp();
-+			spinlock_acquire(&s_lock);
++			bp();
 +			//KASSERT((padr & PAGE_FRAME) == padr);
 +			tlb_random(faultaddress, padr);
 +			spinlock_release(&s_lock);
 +		}
-+
++		//vm_write
++//		if(faulttype==1){
++//		spinlock_acquire(&s_lock);
++//			int m=tlb_probe(faultaddress, padr);
++//			if (m>=0&&m<=NUM_TLB){spinlock_release(&s_lock);return 0;}
++//
++//			while(p!= NULL){
++//				if(p->va == faultaddress){
++//					bp();
++//					p2=p;
++//					break;}
++//					p=p->next;
++//					}
++//				bp();
++//
++//				if( p2->PTE_P == 1){
++//
++//				padr = p2->pa | TLBLO_DIRTY | TLBLO_VALID;
++//							}
++//								else{
++//									padr=page_alloc();
++//									padr = padr | TLBLO_DIRTY | TLBLO_VALID;
++//								}
++//
++//
++//bp();
++//						tlb_random(faultaddress, padr);
++//						spinlock_release(&s_lock);
++//		}
 +		//vm_readonly
 +		if(faulttype==2){
 +			//p = curthread->t_addrspace->ptable;
@@ -4547,10 +4481,10 @@ index 0000000..05339f9
 +//
 diff --git a/submit.patch b/submit.patch
 new file mode 100644
-index 0000000..416b3ef
+index 0000000..5ebe9f7
 --- /dev/null
 +++ b/submit.patch
-@@ -0,0 +1,4532 @@
+@@ -0,0 +1,4376 @@
 +diff --git a/.cproject b/.cproject
 +new file mode 100644
 +index 0000000..f70133d
@@ -6037,39 +5971,9 @@ index 0000000..416b3ef
 ++
 ++ #endif /* FILESYS_H_ */
 ++
-+diff --git a/kern/include/kern/limits.h b/kern/include/kern/limits.h
-+index 3fad3f2..3863055 100644
-+--- a/kern/include/kern/limits.h
-++++ b/kern/include/kern/limits.h
-+@@ -49,13 +49,13 @@
-+  */
-+ 
-+ /* Longest filename (without directory) not including null terminator */
-+-#define __NAME_MAX      255
-++#define __NAME_MAX     60 //255
-+ 
-+ /* Longest full path name */
-+-#define __PATH_MAX      1024
-++#define __PATH_MAX      30//1024
-+ 
-+ /* Max bytes for an exec function */
-+-#define __ARG_MAX       (64 * 1024)
-++#define __ARG_MAX       100//(64 * 1024)
-+ 
-+ 
-+ /*
-+@@ -91,7 +91,7 @@
-+  */
-+ 
-+ /* Max open files per process */
-+-#define __OPEN_MAX      128
-++#define __OPEN_MAX      50//128
-+ 
-+ /* Max number of iovec structures at once for readv/writev/preadv/pwritev */
-+ #define __IOV_MAX       1024
 +diff --git a/kern/include/kern/process.h b/kern/include/kern/process.h
 +new file mode 100644
-+index 0000000..83094b1
++index 0000000..6b14c98
 +--- /dev/null
 ++++ b/kern/include/kern/process.h
 +@@ -0,0 +1,22 @@
@@ -6079,7 +5983,7 @@ index 0000000..416b3ef
 ++#include <limits.h>
 ++#include <thread.h>
 ++#include <synch.h>
-++extern struct process* ptable[130];
+++extern struct process* ptable[256];
 ++
 ++struct process
 ++{ pid_t ppid;
@@ -6231,7 +6135,7 @@ index 0000000..416b3ef
 + 	struct addrspace *t_addrspace;	/* virtual address space */
 + 
 +diff --git a/kern/include/vm.h b/kern/include/vm.h
-+index e4e73d0..99e8de4 100644
++index e4e73d0..2dda8c4 100644
 +--- a/kern/include/vm.h
 ++++ b/kern/include/vm.h
 +@@ -29,14 +29,35 @@
@@ -6266,7 +6170,7 @@ index 0000000..416b3ef
 + 
 ++vaddr_t page_alloc(struct addrspace* newas,vaddr_t va);
 ++vaddr_t page_nalloc(int npages);
-++void page_free(vaddr_t va, struct addrspace* as);
+++void page_free(vaddr_t va);
 ++void make_page_avail(struct coremap_entry *coremap);
 + #include <machine/vm.h>
 + 
@@ -6787,10 +6691,10 @@ index 0000000..416b3ef
 +Binary files /dev/null and b/kern/syscall/.filesys.c.swp differ
 +diff --git a/kern/syscall/filesys.c b/kern/syscall/filesys.c
 +new file mode 100644
-+index 0000000..6b60676
++index 0000000..5dec5a0
 +--- /dev/null
 ++++ b/kern/syscall/filesys.c
-+@@ -0,0 +1,450 @@
++@@ -0,0 +1,440 @@
 ++#include <syscall.h> 
 ++#include <lib.h> 
 ++#include <vfs.h> 
@@ -7099,10 +7003,6 @@ index 0000000..416b3ef
 ++			return EBADF;
 ++		}
 ++	}
-++	if(newfd>=0&&newfd<3){
-++		*retval=newfd;
-++		return 0;
-++	}
 ++
 ++	curthread->fdtable[newfd] = curthread->fdtable[oldfd];
 ++
@@ -7182,14 +7082,10 @@ index 0000000..416b3ef
 ++
 ++int sys_chdir(const char *pathname, int *retval){
 ++	char *path;
-++	//size_t len;
-++	if (pathname==NULL) return EFAULT;
-++	if (pathname>=(char*)0x80000000) return EFAULT;
-++	if (pathname==(void*)0x40000000) return EFAULT;
-++
+++	size_t len;
 ++	path = (char *)kmalloc(sizeof(char)*PATH_MAX);
 ++	int result = 0;
-++	result = copyin((const_userptr_t)pathname, path, sizeof(pathname));
+++	result = copyinstr((const_userptr_t)pathname, path, PATH_MAX, &len);
 ++	if(result){
 ++		kfree(path);
 ++		*retval = -1;		
@@ -7210,8 +7106,6 @@ index 0000000..416b3ef
 ++	struct uio u;
 ++	struct iovec i;
 ++	if(buf==NULL) return EFAULT;
-++//	if(buf>=(char*)0x80000000) return EFAULT;
-++//	if(buf==(char*)0x40000000) return EFAULT;
 ++	
 ++	//char *nbuf=(char *)kmalloc(sizeof(char)*buflen);	
 ++	int result = 0;
@@ -7243,7 +7137,7 @@ index 0000000..416b3ef
 ++}
 +diff --git a/kern/syscall/process.c b/kern/syscall/process.c
 +new file mode 100644
-+index 0000000..6586990
++index 0000000..569f6a6
 +--- /dev/null
 ++++ b/kern/syscall/process.c
 +@@ -0,0 +1,73 @@
@@ -7265,13 +7159,13 @@ index 0000000..416b3ef
 ++#include <vnode.h>
 ++#include <kern/process.h>
 ++#include <kern/filesys.h>
-++//struct spinlock pt_lk=SPINLOCK_INITIALIZER;
+++struct spinlock pt_lk=SPINLOCK_INITIALIZER;
 ++ //void thread_destroy(struct thread *thread);
-++struct process *ptable[130];
+++struct process *ptable[256];
 ++
 ++pid_t pid_alloc(void){
-++	//spinlock_acquire(&pt_lk);
-++	for (int i=2; i<130; i++){
+++	spinlock_acquire(&pt_lk);
+++	for (int i=2; i<256; i++){
 ++		if (ptable[i]==NULL){
 ++		return (pid_t)i;
 ++		}
@@ -7299,7 +7193,7 @@ index 0000000..416b3ef
 ++		//	return ENOMEM;
 ++		//}
 ++		ptable[pid]=proc;
-++		//spinlock_release(&pt_lk);
+++		spinlock_release(&pt_lk);
 ++		return 0;
 ++}
 ++
@@ -7322,7 +7216,7 @@ index 0000000..416b3ef
 ++}
 +diff --git a/kern/syscall/process_support.c b/kern/syscall/process_support.c
 +new file mode 100644
-+index 0000000..40b72a6
++index 0000000..f24c817
 +--- /dev/null
 ++++ b/kern/syscall/process_support.c
 +@@ -0,0 +1,354 @@
@@ -7349,7 +7243,7 @@ index 0000000..416b3ef
 ++#include <kern/process.h>
 ++#include <kern/filesys.h>
 ++
-++struct process* ptable[130];
+++struct process* ptable[256];
 ++int sys_fork(struct trapframe *tf,int *retval ){
 ++	
 ++	struct trapframe* ktf=kmalloc(sizeof(struct trapframe));
@@ -7402,9 +7296,9 @@ index 0000000..416b3ef
 ++	curthread->t_addrspace =space;
 ++	//curthread->t_addrspace = as_create();
 ++	
-++	//int i=0;
-++	//for(i=2;i<256;i++){if (ptable[i]->self->t_addrspace==curthread->t_addrspace ) break; }
-++	//for(int k=63;k<pnum;k++){if(coremap[k].as==curthread->t_addrspace)coremap[k].pid=i;}
+++	int i=0;
+++	for(i=2;i<256;i++){if (ptable[i]->self->t_addrspace==curthread->t_addrspace ) break; }
+++	for(int k=63;k<128;k++){if(coremap[k].as==curthread->t_addrspace)coremap[k].pid=i;}
 ++	//memcpy(curthread->t_addrspace, sp, sizeof(struct addrspace));
 ++	as_activate(curthread->t_addrspace);
 ++	//tf->tf_a1=1;
@@ -7669,7 +7563,7 @@ index 0000000..416b3ef
 ++	if(amount==(-8192)) return EINVAL;
 ++	if(amount==(-17)) return EINVAL;
 ++	if(amount==17) return EINVAL;
-++	if(amount+heap<heap){page_free((amount+heap)&PAGE_FRAME, curthread->t_addrspace);curthread->t_addrspace->heap_top=amount+heap; return 0;}
+++	if(amount+heap<heap){page_free((amount+heap)&PAGE_FRAME);curthread->t_addrspace->heap_top=amount+heap; return 0;}
 ++	amount=ROUNDUP(amount,4);
 ++	KASSERT((amount+heap)>=curthread->t_addrspace->heap_base);
 ++	KASSERT((amount+heap)<curthread->t_addrspace->stack_base);
@@ -8169,7 +8063,7 @@ index 0000000..416b3ef
 +         splhigh();
 + 	thread_switch(S_ZOMBIE, NULL);
 +diff --git a/kern/vm/addrspace.c b/kern/vm/addrspace.c
-+index 302fa7b..e25ec4d 100644
++index 302fa7b..597861f 100644
 +--- a/kern/vm/addrspace.c
 ++++ b/kern/vm/addrspace.c
 +@@ -32,13 +32,13 @@
@@ -8319,7 +8213,7 @@ index 0000000..416b3ef
 ++
 ++	while(as->ptable != NULL){  ////clean pagetable
 ++		pt = as->ptable;
-++		page_free(as->ptable->va,as);
+++		page_free(as->ptable->va);
 ++		as->ptable->va=0;
 ++		as->ptable = as->ptable->next;
 ++		//bzero(pt, sizeof(struct PTE));
@@ -8346,35 +8240,38 @@ index 0000000..416b3ef
 + 	(void)as;  // suppress warning until code gets written
 + }
 + 
-+@@ -106,6 +212,27 @@ as_activate(struct addrspace *as)
++@@ -106,6 +212,30 @@ as_activate(struct addrspace *as)
 +  * moment, these are ignored. When you write the VM system, you may
 +  * want to implement them.
 +  */
-++//static void addpte(struct PTE *tmp1, int i, vaddr_t vaddr,  struct addrspace *as,int readable, int writeable, int executable){
-++//	tmp1->va=vaddr+i*PAGE_SIZE;
-++////update permission
-++//	if(readable==4)tmp1->read=1;
-++//	if(writeable==2)tmp1->write=1;
-++//	if(executable==1)tmp1->exe=1;
-++////spinlock_acquire(&coremap_lk);
-++//
-++//tmp1->pa=-1;//KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace,tmp1->va));
-++////int j=(tmp1->pa)/PAGE_SIZE;
-++//tmp1->PTE_P=1;
-++//tmp1->next=NULL;
-++//as->pagenum++;
+++static void addpte(struct PTE *tmp1, int i, vaddr_t vaddr,  struct addrspace *as,int readable, int writeable, int executable){
+++	tmp1->va=vaddr+i*PAGE_SIZE;
+++//update permission
+++	if(readable==4)tmp1->read=1;
+++	if(writeable==2)tmp1->write=1;
+++	if(executable==1)tmp1->exe=1;
+++//spinlock_acquire(&coremap_lk);
+++
+++tmp1->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace,tmp1->va));
+++//int j=(tmp1->pa)/PAGE_SIZE;
+++tmp1->PTE_P=1;
+++tmp1->next=NULL;
+++as->pagenum++;
 ++//coremap update
 ++//coremap[j].pid=curthread->t_pid;
 ++//coremap[j].va=tmp1->va;
 ++//coremap[j].as=as;
 ++//coremap[j].pgstate=DIRTY;
 ++//spinlock_release(&coremap_lk);
-++
-++
+++}
+++static void ap()
+++{
+++	return ;
+++}
 + int
 + as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 + 		 int readable, int writeable, int executable)
-+@@ -113,14 +240,77 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
++@@ -113,14 +243,77 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 + 	/*
 + 	 * Write this.
 + 	 */
@@ -8410,43 +8307,43 @@ index 0000000..416b3ef
 ++		tmp->next=reg;
 ++		count=reg->psize;
 ++	}
-++	as->heap_base=vaddr+(sz/PAGE_SIZE)*PAGE_SIZE;
-++		as->heap_top=as->heap_base;
+++
 ++
 ++
 ++
 ++
 ++
 ++	// update pagetable
-++//	struct PTE *PT= as->ptable;
-++//	struct PTE *pt1=kmalloc(sizeof(struct PTE) );
-++//	KASSERT(pt1!=NULL);
-++//	addpte(pt1,0,vaddr,as,readable,writeable, executable);
-++//	struct PTE *tmp1=pt1;
-++////ap();
-++//	for(int i=1;i<count;i++){
-++//		ap();
-++//
-++//		tmp1->next=kmalloc(sizeof(struct PTE));
-++//		tmp1=tmp1->next;
-++//		KASSERT(tmp1!=NULL);
-++////
-++//		addpte(tmp1,i,vaddr,as,readable,writeable, executable);
-++////		ap();
-++//	//coremap update
-++//
-++//	}
-++//
-++//	if (as->ptable==NULL){as->ptable=pt1;}
-++//	else{while(PT->next!=NULL){
-++//			PT=PT->next;
-++//			ap();
-++//		}
-++//	PT->next=pt1;
-++//	ap();
-++//	}
-++	//HEAP
+++	struct PTE *PT= as->ptable;
+++	struct PTE *pt1=kmalloc(sizeof(struct PTE) );
+++	KASSERT(pt1!=NULL);
+++	addpte(pt1,0,vaddr,as,readable,writeable, executable);
+++	struct PTE *tmp1=pt1;
+++ap();
+++	for(int i=1;i<count;i++){
+++		ap();
 ++
+++		tmp1->next=kmalloc(sizeof(struct PTE));
+++		tmp1=tmp1->next;
+++		KASSERT(tmp1!=NULL);
+++
+++		addpte(tmp1,i,vaddr,as,readable,writeable, executable);
+++		ap();
+++	//coremap update
+++
+++	}
+++
+++	if (as->ptable==NULL){as->ptable=pt1;}
+++	else{while(PT->next!=NULL){
+++			PT=PT->next;
+++			ap();
+++		}
+++	PT->next=pt1;
+++	ap();
+++	}
+++	//HEAP
+++	as->heap_base=vaddr+(sz/PAGE_SIZE)*PAGE_SIZE;
+++	as->heap_top=as->heap_base;
 ++
 ++
 ++//	(void)as;
@@ -8459,49 +8356,22 @@ index 0000000..416b3ef
 + }
 + 
 + int
-+@@ -130,7 +320,40 @@ as_prepare_load(struct addrspace *as)
++@@ -129,8 +322,12 @@ as_prepare_load(struct addrspace *as)
++ 	/*
 + 	 * Write this.
 + 	 */
-+ 
++-
 +-	(void)as;
 ++	struct region *tmp=as->region;
 ++	while (tmp!=NULL){
 ++		if (tmp->write==0) {tmp->write=1;tmp->flag=1;}
-++//		struct PTE *PT= as->ptable;
-++//			struct PTE *pt1=kmalloc(sizeof(struct PTE) );
-++//			KASSERT(pt1!=NULL);
-++//			addpte(pt1,0,tmp->vbase,as,tmp->read,tmp->write, tmp->exe);
-++//			struct PTE *tmp1=pt1;
-++//		//ap();
-++//			for(int i=1;i<count;i++){
-++//				ap();
-++//
-++//				tmp1->next=kmalloc(sizeof(struct PTE));
-++//				tmp1=tmp1->next;
-++//				KASSERT(tmp1!=NULL);
-++//		//
-++//				addpte(tmp1,i,tmp->vbase,as,tmp->read,tmp->write, tmp->exe);
-++//		//		ap();
-++//			//coremap update
-++//
-++//			}
-++//
-++//			if (as->ptable==NULL){as->ptable=pt1;}
-++//			else{while(PT->next!=NULL){
-++//					PT=PT->next;
-++//					ap();
-++//				}
-++//			PT->next=pt1;
-++//			ap();
-++//			}
-++
 ++		tmp=tmp->next;
 ++	}
 ++	//(void)as;
 + 	return 0;
 + }
 + 
-+@@ -140,6 +363,11 @@ as_complete_load(struct addrspace *as)
++@@ -140,6 +337,11 @@ as_complete_load(struct addrspace *as)
 + 	/*
 + 	 * Write this.
 + 	 */
@@ -8513,7 +8383,7 @@ index 0000000..416b3ef
 + 
 + 	(void)as;
 + 	return 0;
-+@@ -152,10 +380,11 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
++@@ -152,10 +354,11 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 + 	 * Write this.
 + 	 */
 + 
@@ -8544,10 +8414,10 @@ index 0000000..416b3ef
 +  */
 +diff --git a/kern/vm/vm.c b/kern/vm/vm.c
 +new file mode 100644
-+index 0000000..05339f9
++index 0000000..374abaf
 +--- /dev/null
 ++++ b/kern/vm/vm.c
-+@@ -0,0 +1,550 @@
++@@ -0,0 +1,548 @@
 ++/*
 ++ * vm.c
 ++ *
@@ -8568,7 +8438,6 @@ index 0000000..416b3ef
 ++
 ++struct spinlock coremap_lk=SPINLOCK_INITIALIZER;
 ++struct spinlock tlb_lk=SPINLOCK_INITIALIZER;
-++struct spinlock s_lock=SPINLOCK_INITIALIZER;
 ++
 ++static int bootstrap=0;
 ++static int free_start=0;
@@ -8667,9 +8536,6 @@ index 0000000..416b3ef
 ++	for(i=free_start;i<pnum;i++){
 ++		if(coremap[i].pgstate==FREE)break;
 ++	}
-++	//kprintf("i = %d\n", i);
-++	KASSERT(i!=pnum);
-++	//if(i==128) panic("run out of coremap");
 ++	if(coremap[i].pgstate!=FREE){
 ++		pp();
 ++		return EFAULT;
@@ -8703,7 +8569,6 @@ index 0000000..416b3ef
 ++	for (i=free_start;i<pnum;i++){
 ++		if(coremap[i].va==addr)break;
 ++	}
-++
 ++	if(i==pnum) {spinlock_release(&coremap_lk);return;}
 ++	//coremap[i].as->ptable
 ++	//if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
@@ -8723,7 +8588,7 @@ index 0000000..416b3ef
 ++	spinlock_release(&coremap_lk);
 ++}
 ++
-++void page_free(vaddr_t addr, struct addrspace* as){
+++void page_free(vaddr_t addr){
 ++	addr&=PAGE_FRAME;
 ++//		struct PTE *pt=curthread->t_addrspace->ptable;
 ++//		int count=curthread->t_addrspace->pagenum;
@@ -8734,13 +8599,12 @@ index 0000000..416b3ef
 ++//		KASSERT(k!=0);
 ++		spinlock_acquire(&coremap_lk);
 ++	for (i=0;i<pnum;i++){
-++		if(coremap[i].va==addr&&coremap[i].as==as)break;
+++		if(coremap[i].va==addr&&coremap[i].pid==curthread->t_pid)break;
 ++	}
-++
-++	KASSERT(i!=pnum);
-++	//if(i==pnum) {spinlock_release(&coremap_lk);return;}
+++	//KASSERT(i!=pnum);
+++	if(i==pnum) {spinlock_release(&coremap_lk);return;}
 ++	//KASSERT(coremap[i].pgstate!=FIXED);
-++	//if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
+++	if(coremap[i].pgstate==FIXED){spinlock_release(&coremap_lk);return;}
 ++
 ++
 ++
@@ -8749,7 +8613,7 @@ index 0000000..416b3ef
 ++		coremap[i].pgstate=FREE;
 ++		coremap[i].chunk=1;
 ++		coremap[i].as=NULL;
-++		coremap[i].pid=-2;
+++		coremap[i].pid=0;
 ++
 ++	spinlock_release(&coremap_lk);
 ++}
@@ -8789,9 +8653,7 @@ index 0000000..416b3ef
 ++		struct PTE *tmp;
 ++		struct PTE *p2=NULL;
 ++		int flag=0;
-++		char read=1;
-++		char write=1;
-++		char exe=1;
+++
 ++		int tlb_index;
 ++		//paddr_t pad = 0;
 ++		if(curthread->t_addrspace == NULL) return EFAULT;
@@ -8799,11 +8661,11 @@ index 0000000..416b3ef
 ++
 ++
 ++		KASSERT(faultaddress < MIPS_KSEG0);
-++	//	KASSERT(as->ptable != NULL);
+++		KASSERT(as->ptable != NULL);
 ++		KASSERT(as->region != NULL);
 ++		KASSERT(as->heap_base != 0);
 ++		KASSERT(as->heap_top != 0);
-++	//KASSERT((as->ptable->va & PAGE_FRAME) == as->ptable->va);
+++	KASSERT((as->ptable->va & PAGE_FRAME) == as->ptable->va);
 ++		//cp();
 ++		//KASSERT((as->ptable->pa & PAGE_FRAME) == as->ptable->pa);
 ++
@@ -8811,18 +8673,18 @@ index 0000000..416b3ef
 ++		vaddr_t vadr = faultaddress;
 ++		faultaddress &= PAGE_FRAME;
 ++
-++		//struct spinlock s_lock;
+++		struct spinlock s_lock;
 ++		struct PTE *p = as->ptable;
 ++		paddr_t padr = 0;
 ++		//vaddr_t vadr = faultaddress;
-++		//spinlock_init(&s_lock);
+++		spinlock_init(&s_lock);
 ++		while (reg!=NULL){
-++					//bp();
-++					if ((faultaddress>=reg->vbase) && (faultaddress<(reg->vbase+PAGE_SIZE*reg->psize))) {flag=1;read=reg->read;write=reg->write;exe=reg->exe;}
+++					bp();
+++					if ((faultaddress>=reg->vbase) && (faultaddress<(reg->vbase+PAGE_SIZE*reg->psize))) flag=1;
 ++					reg=reg->next;
-++					//bp();
+++					bp();
 ++				}
-++				//bp();
+++				bp();
 ++				if ((vadr>=as->heap_base) && vadr<(as->heap_top)) flag=1;
 ++				if (vadr>=(as->stack_base) && vadr<(as->stack_top)) flag=1;
 ++				if (flag==0) {panic("0ddddddd");}
@@ -8831,67 +8693,73 @@ index 0000000..416b3ef
 ++		if (faulttype!=0 && faulttype!=1 && faulttype!=2){panic("unknown fault");}
 ++		//vm_read
 ++		if (faulttype==0||faulttype==1){
+++			spinlock_acquire(&s_lock);
+++			int m=tlb_probe(faultaddress, padr);
+++			if (m>=0&&m<=NUM_TLB){spinlock_release(&s_lock);panic("TLB wrong");}
+++			while(p != NULL){
+++				if(p->next==NULL){tmp=p;}
+++				if(p->va == faultaddress ){
+++					if( p->PTE_P == 1){
+++						//if(p->write==1)
+++					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
+++						//else padr = p->pa | TLBLO_VALID;
+++					}
+++				}
+++//
+++				p = p->next;
+++			}
+++			if(padr==0) {tmp->next=kmalloc(sizeof(struct PTE));
+++			p=tmp->next;
+++			p->exe=1;
+++			p->read=1;
+++			p->write=1;
+++			p->va=faultaddress;
+++			p->PTE_P=1;
 ++
-++//			int m=tlb_probe(faultaddress, padr);
-++//			if (m>=0&&m<=NUM_TLB){spinlock_release(&s_lock);panic("TLB wrong");}
-++			if(as->ptable==NULL){
-++			as->ptable=kmalloc(sizeof(struct PTE));
-++			//p=tmp->next;
-++			as->ptable->exe=exe;
-++			as->ptable->read=read;
-++			as->ptable->write=write;
-++			as->ptable->va=faultaddress;
-++			as->ptable->PTE_P=1;
-++
-++			as->ptable->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
+++			p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
 ++			as->pagenum++;
 ++
 ++			//int j=(p->pa)/PAGE_SIZE;
 ++
 ++
 ++
-++			as->ptable->next=NULL;
-++			padr = as->ptable->pa | TLBLO_DIRTY | TLBLO_VALID;
+++			p->next=NULL;
+++			padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
 ++			}
-++
-++			else {while(p != NULL){
-++				if(p->next==NULL){tmp=p;}
-++				if(p->va == faultaddress ){
-++					if( p->PTE_P == 1){
-++						//if(p->write==1)
-++						//
-++					padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
-++						//else padr = p->pa | TLBLO_VALID;
-++					}
-++					//else {p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;}
-++				}
-++//
-++				p = p->next;
-++			}
-++
-++			if(padr==0) {tmp->next=kmalloc(sizeof(struct PTE));
-++						p=tmp->next;
-++						p->exe=exe;
-++						p->read=read;
-++						p->write=write;
-++						p->va=faultaddress;
-++						p->PTE_P=1;
-++
-++						p->pa=KVADDR_TO_PADDR(page_alloc(curthread->t_addrspace, faultaddress));
-++						as->pagenum++;
-++
-++						//int j=(p->pa)/PAGE_SIZE;
-++						p->next=NULL;
-++						padr = p->pa | TLBLO_DIRTY | TLBLO_VALID;
-++						}
-++			}
-++			//bp();
-++			spinlock_acquire(&s_lock);
+++			bp();
 ++			//KASSERT((padr & PAGE_FRAME) == padr);
 ++			tlb_random(faultaddress, padr);
 ++			spinlock_release(&s_lock);
 ++		}
-++
+++		//vm_write
+++//		if(faulttype==1){
+++//		spinlock_acquire(&s_lock);
+++//			int m=tlb_probe(faultaddress, padr);
+++//			if (m>=0&&m<=NUM_TLB){spinlock_release(&s_lock);return 0;}
+++//
+++//			while(p!= NULL){
+++//				if(p->va == faultaddress){
+++//					bp();
+++//					p2=p;
+++//					break;}
+++//					p=p->next;
+++//					}
+++//				bp();
+++//
+++//				if( p2->PTE_P == 1){
+++//
+++//				padr = p2->pa | TLBLO_DIRTY | TLBLO_VALID;
+++//							}
+++//								else{
+++//									padr=page_alloc();
+++//									padr = padr | TLBLO_DIRTY | TLBLO_VALID;
+++//								}
+++//
+++//
+++//bp();
+++//						tlb_random(faultaddress, padr);
+++//						spinlock_release(&s_lock);
+++//		}
 ++		//vm_readonly
 ++		if(faulttype==2){
 ++			//p = curthread->t_addrspace->ptable;
@@ -8993,94 +8861,3 @@ index 0000000..416b3ef
 ++//	}
 ++//
 ++//	if (as->as_vbase2 == 0) {
-++//		as->as_vbase2 = vaddr;
-++//		as->as_npages2 = npages;
-++//		return 0;
-++//	}
-++//
-++//	/*
-++//	 * Support for more than two regions is not available.
-++//	 */
-++//	kprintf("dumbvm: Warning: too many regions\n");
-++//	return EUNIMP;
-++//}
-++//
-++//static
-++//void
-++//as_zero_region(paddr_t paddr, unsigned npages)
-++//{
-++//	bzero((void *)PADDR_TO_KVADDR(paddr), npages * PAGE_SIZE);
-++//}
-++//
-++//int
-++//as_prepare_load(struct addrspace *as)
-++//{
-++//	KASSERT(as->as_pbase1 == 0);
-++//	KASSERT(as->as_pbase2 == 0);
-++//	KASSERT(as->as_stackpbase == 0);
-++//
-++//	as->as_pbase1 = getppages(as->as_npages1);
-++//	if (as->as_pbase1 == 0) {
-++//		return ENOMEM;
-++//	}
-++//
-++//	as->as_pbase2 = getppages(as->as_npages2);
-++//	if (as->as_pbase2 == 0) {
-++//		return ENOMEM;
-++//	}
-++//
-++//	as->as_stackpbase = getppages(DUMBVM_STACKPAGES);
-++//	if (as->as_stackpbase == 0) {
-++//		return ENOMEM;
-++//	}
-++//
-++//	as_zero_region(as->as_pbase1, as->as_npages1);
-++//	as_zero_region(as->as_pbase2, as->as_npages2);
-++//	as_zero_region(as->as_stackpbase, DUMBVM_STACKPAGES);
-++//
-++//	return 0;
-++//}
-++//
-++//int
-++//as_complete_load(struct addrspace *as)
-++//{
-++//	(void)as;
-++//	return 0;
-++//}
-++//
-++//int
-++//as_define_stack(struct addrspace *as, vaddr_t *stackptr)
-++//{
-++//	KASSERT(as->as_stackpbase != 0);
-++//
-++//	*stackptr = USERSTACK;
-++//	return 0;
-++//}
-++//
-++//int
-++//as_copy(struct addrspace *old, struct addrspace **ret)
-++//{
-++//	struct addrspace *new;
-++//
-++//	new = as_create();
-++//	if (new==NULL) {
-++//		return ENOMEM;
-++//	}
-++//
-++//	new->as_vbase1 = old->as_vbase1;
-++//	new->as_npages1 = old->as_npages1;
-++//	new->as_vbase2 = old->as_vbase2;
-++//	new->as_npages2 = old->as_npages2;
-++//
-++//	/* (Mis)use as_prepare_load to allocate some physical memory. */
-++//	if (as_prepare_load(new)) {
-++//		as_destroy(new);
-++//		return ENOMEM;
-++//	}
-++//
-++//	KASSERT(new->as_pbase1 != 0);
-++//	KASSERT(new->as_pbase2 != 0);
-++//	KASSERT(new->as_stackpbase != 0);
-++//
-++//	memmove((void *)PADDR_TO_KVADDR(new->as_pbase
-\ No newline at end of file

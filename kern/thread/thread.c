@@ -861,7 +861,7 @@ thread_exit(void)
 	/*close fdtable if needed*/
 	int ret=0;
 	int k=0;	
-	for(int i=OPEN_MAX;i>0;i--){
+	for(int i=0;i<OPEN_MAX;i++){
 	if (cur->fdtable[i]!=NULL){
 	k=sys_close(i,&ret);
 		}
